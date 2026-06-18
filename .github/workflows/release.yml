@@ -36,7 +36,7 @@ jobs:
         include:
           - name: macOS
             os: macos-14
-            command: pnpm run build:app && pnpm exec electron-builder --mac --x64 --arm64
+            command: pnpm run build:app && pnpm exec electron-builder --mac --x64 --arm64 --publish never
             artifact: release-macos
             files: |
               dist/*.dmg
@@ -47,14 +47,6 @@ jobs:
             artifact: release-windows
             files: |
               dist/*.exe
-          - name: Linux
-            os: ubuntu-22.04
-            command: pnpm run build:linux
-            artifact: release-linux
-            files: |
-              dist/*.AppImage
-              dist/*.deb
-              dist/*.snap
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'

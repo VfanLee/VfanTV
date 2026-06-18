@@ -44,16 +44,4 @@ mac:
   notarize: false
 dmg:
   artifactName: VfanTV-v${version}-${arch}.${ext}
-linux:
-  target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: vfan
-  category: Utility
-appImage:
-  artifactName: VfanTV-v${version}.${ext}
 npmRebuild: true
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
