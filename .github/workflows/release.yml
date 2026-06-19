@@ -99,11 +99,6 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name | select(endswith(".zip"))' |
-              while IFS= read -r asset; do
-                gh release delete-asset "$RELEASE_TAG" "$asset" --yes --repo "$GITHUB_REPOSITORY"
-              done
-            gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$RELEASE_TAG" release-assets/* --verify-tag --generate-notes --title "VfanTV $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+            gh release delete "$RELEASE_TAG" --yes --repo "$GITHUB_REPOSITORY"
           fi
+          gh release create "$RELEASE_TAG" release-assets/* --verify-tag --generate-notes --title "VfanTV $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
