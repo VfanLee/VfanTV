@@ -34,12 +34,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS x64
-            os: macos-14
-            command: pnpm run build:mac:x64 --publish never
-            artifact: release-macos-x64
-            files: |
-              dist/*-x64.dmg
           - name: macOS arm64
             os: macos-14
             command: pnpm run build:mac:arm64 --publish never
@@ -51,13 +45,15 @@ jobs:
             command: pnpm run build:win:x64 --publish never
             artifact: release-windows-x64
             files: |
-              dist/*-x64-*.exe
+              dist/*-x64-setup.exe
+              dist/*-x64-portable.exe
           - name: Windows arm64
             os: windows-2022
             command: pnpm run build:win:arm64 --publish never
             artifact: release-windows-arm64
             files: |
-              dist/*-arm64-*.exe
+              dist/*-arm64-setup.exe
+              dist/*-arm64-portable.exe
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'

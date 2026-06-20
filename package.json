@@ -23,7 +23,6 @@
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win:x64": "pnpm run build && electron-builder --win --x64",
     "build:win:arm64": "pnpm run build && electron-builder --win --arm64",
-    "build:mac:x64": "pnpm run build && electron-builder --mac --x64",
     "build:mac:arm64": "pnpm run build && electron-builder --mac --arm64",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
