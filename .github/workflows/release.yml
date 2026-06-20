@@ -1,4 +1,4 @@
-name: Release
+name: Build/release
 
 on:
   push:
@@ -26,34 +26,27 @@ jobs:
         run: |
           node -e "const version = require('./package.json').version; const expected = 'v' + version; if (process.env.RELEASE_TAG !== expected) { console.error('Tag ' + process.env.RELEASE_TAG + ' does not match package version ' + expected); process.exit(1); }"
 
-  build:
-    name: Build ${{ matrix.name }}
+  release:
+    name: Build ${{ matrix.platform }}
     needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macOS arm64
+          - platform: macOS arm64
             os: macos-14
-            command: pnpm run build:mac:arm64 --publish never
-            artifact: release-macos-arm64
+            args: --mac
+            artifact: release-macos
             files: |
               dist/*-arm64.dmg
-          - name: Windows x64
+          - platform: Windows x64/arm64
             os: windows-2022
-            command: pnpm run build:win:x64 --publish never
-            artifact: release-windows-x64
+            args: --win
+            artifact: release-windows
             files: |
               dist/*-x64-setup.exe
-              dist/*-x64-portable.exe
-          - name: Windows arm64
-            os: windows-2022
-            command: pnpm run build:win:arm64 --publish never
-            artifact: release-windows-arm64
-            files: |
               dist/*-arm64-setup.exe
-              dist/*-arm64-portable.exe
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -76,8 +69,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build installers
-        run: ${{ matrix.command }}
+      - name: Build application
+        run: pnpm run build:app
+
+      - name: Build/release Electron app
+        run: pnpm exec electron-builder ${{ matrix.args }} --publish never
 
       - name: Upload installers
         uses: actions/upload-artifact@v7
@@ -87,9 +83,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  release:
+  publish:
     name: Publish GitHub Release
-    needs: build
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
