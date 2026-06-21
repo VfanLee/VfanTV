@@ -32,6 +32,7 @@ const api: AppApi = {
   vod: {
     search: (keyword) => ipcRenderer.invoke('vod:search', keyword),
     cancelSearch: (searchId) => ipcRenderer.invoke('vod:cancel-search', searchId),
+    probeMedia: (input) => ipcRenderer.invoke('vod:probe-media', input),
     onSearchEvent: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, payload: SearchEvent): void => listener(payload)
       ipcRenderer.on('vod:search-event', handler)

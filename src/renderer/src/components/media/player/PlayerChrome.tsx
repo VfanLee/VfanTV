@@ -493,12 +493,13 @@ export function PlayerChrome({
       <Controls.Root className="pointer-events-none absolute inset-0 z-20">
         <Controls.Group
           className={cn(
-            'absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-4 pt-4 transition-opacity duration-150',
+            'absolute inset-x-0 top-0 flex h-14 items-center justify-between gap-3 px-4 transition-opacity duration-150',
+            isTheaterMode ? 'bg-linear-to-b from-black/75 to-transparent' : 'bg-black',
             controlsAreVisible ? 'pointer-events-auto opacity-100' : 'opacity-0',
           )}
         >
           {title ? (
-            <div className="pointer-events-none min-w-0 flex-1 px-1 py-2 text-[17px] leading-6 font-semibold text-white">
+            <div className="pointer-events-none min-w-0 flex-1 px-1 py-2 text-xl leading-6 font-semibold text-white">
               <span className="block truncate">{title}</span>
             </div>
           ) : (
@@ -523,13 +524,14 @@ export function PlayerChrome({
 
         <Controls.Group
           className={cn(
-            'absolute inset-x-0 bottom-0 bg-linear-to-t from-black/82 via-black/45 to-transparent px-3.5 pt-14 pb-2.5 transition-opacity duration-150',
+            'absolute inset-x-0 bottom-0 h-20 px-4 py-2 transition-opacity duration-150',
+            isTheaterMode ? 'bg-linear-to-t from-black/85 via-black/55 to-transparent' : 'bg-black',
             controlsAreVisible ? 'pointer-events-auto opacity-100' : 'opacity-0',
           )}
         >
           <PlayerTimeSlider />
 
-          <div className="mt-1.5 flex items-center justify-between gap-4">
+          <div className="-mx-3.5 mt-1.5 -mb-2.5 flex items-center justify-between gap-4 px-3.5 pb-2.5">
             <div className="flex min-w-0 items-center gap-1">
               <PlayerControlTooltip label="上一集">
                 <PlayerIconButton

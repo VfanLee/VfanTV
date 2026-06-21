@@ -12,6 +12,7 @@ import { DoubanService } from '../services/douban.service'
 import { openExternalUrl } from '../services/external-link'
 import { HomeService } from '../services/home.service'
 import { HttpClient } from '../services/http-client'
+import { probeMediaSource } from '../services/media-probe.service'
 import { SearchTaskManager } from '../services/search-task-manager'
 import { SettingsService } from '../services/settings.service'
 import { SourceService } from '../services/source.service'
@@ -130,6 +131,9 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('vod:search', (_event, keyword: string) => vodSearchService.search(keyword))
   ipcMain.handle('vod:cancel-search', (_event, searchId: string) => vodSearchService.cancel(searchId))
+  ipcMain.handle('vod:probe-media', (_event, input: Parameters<AppApi['vod']['probeMedia']>[0]) =>
+    probeMediaSource(input),
+  )
   ipcMain.handle('settings:get', () => settingsService.get())
   ipcMain.handle('settings:update', (_event, input: Parameters<AppApi['settings']['update']>[0]) =>
     settingsService.update(input),

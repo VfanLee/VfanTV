@@ -10,7 +10,7 @@ import type { AppSettings } from './settings'
 import type { FavoriteInput, FavoriteItem } from './favorite'
 import type { RecentPlayInput, RecentPlayItem } from './recent'
 import type { SearchEvent } from './search'
-import type { RecommendationItem } from './vod'
+import type { MediaProbeInput, MediaProbeResult, RecommendationItem } from './vod'
 import type { UpdateCheckResult } from './update'
 
 export interface HomeData {
@@ -80,6 +80,7 @@ export interface AppApi {
   vod: {
     search: (keyword: string) => Promise<{ searchId: string }>
     cancelSearch: (searchId: string) => Promise<void>
+    probeMedia: (input: MediaProbeInput) => Promise<MediaProbeResult>
     onSearchEvent: (listener: (event: SearchEvent) => void) => () => void
   }
   settings: {

@@ -15,6 +15,8 @@ import type { PlayerErrorLog } from './player/types'
 const MAX_ERROR_LOGS = 100
 const HLS_MIME_TYPE = 'application/x-mpegurl' as const
 const HLS_PLAYLIST_FILTER_STORAGE_KEY = 'enable_blockad'
+const PLAYER_VOLUME_STORAGE_KEY = 'vfan-player-volume'
+const DEFAULT_PLAYER_VOLUME = 0.8
 
 export interface BasicPlayerProps {
   autoPlay?: boolean
@@ -54,7 +56,11 @@ export function BasicPlayer({
   const appliedLoadKeyRef = useRef('')
   const [reloadNonce, setReloadNonce] = useState(0)
   const [playlistFilteringEnabled, setPlaylistFilteringEnabled] = useState(() => readPlaylistFilteringEnabled())
-  const [playbackSettings, setPlaybackSettings] = useState({ playbackRate: 1, volume: 0.8, muted: false })
+  const [playbackSettings, setPlaybackSettings] = useState(() => ({
+    playbackRate: 1,
+    volume: readStoredPlayerVolume(),
+    muted: false,
+  }))
   const [errorState, setErrorState] = useState<{ src: string | undefined; logs: PlayerErrorLog[] }>({
     src,
     logs: [],
@@ -143,13 +149,18 @@ export function BasicPlayer({
 
   if (!src || !playerSrc) {
     return (
-      <div
-        className={cn(
-          'text-muted-foreground flex h-full w-full items-center justify-center bg-black text-sm',
-          className,
-        )}
-      >
-        请选择一个可播放剧集
+      <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
+        <div aria-hidden="true" className={cn('pointer-events-none w-full', isTheaterMode ? 'h-full' : 'pt-14 pb-20')}>
+          <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
+        </div>
+        <div
+          className={cn(
+            'text-muted-foreground absolute inset-x-0 flex items-center justify-center text-sm',
+            isTheaterMode ? 'inset-y-0' : 'top-14 bottom-20',
+          )}
+        >
+          请选择一个可播放剧集
+        </div>
       </div>
     )
   }
@@ -159,7 +170,11 @@ export function BasicPlayer({
       key={loadKey}
       ref={playerRef}
       autoPlay={autoPlay}
-      className={cn('group/player relative h-full w-full overflow-hidden bg-black outline-none', className)}
+      className={cn(
+        'group/player relative w-full overflow-hidden bg-black outline-none',
+        isTheaterMode && 'h-full',
+        className,
+      )}
       controlsDelay={2000}
       hideControlsOnMouseLeave
       keyDisabled
@@ -198,6 +213,7 @@ export function BasicPlayer({
       }}
       onTimeUpdate={(detail) => reportProgress(detail.currentTime, playerRef.current?.duration ?? 0)}
       onVolumeChange={(detail) => {
+        window.localStorage.setItem(PLAYER_VOLUME_STORAGE_KEY, String(detail.volume))
         setPlaybackSettings((current) => ({
           ...current,
           muted: detail.muted,
@@ -205,7 +221,15 @@ export function BasicPlayer({
         }))
       }}
     >
-      <MediaProvider className="pointer-events-none absolute inset-0 h-full w-full bg-black [&>video]:h-full [&>video]:w-full [&>video]:object-contain" />
+      <div aria-hidden="true" className={cn('pointer-events-none w-full', isTheaterMode ? 'h-full' : 'pt-14 pb-20')}>
+        <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
+      </div>
+      <MediaProvider
+        className={cn(
+          'pointer-events-none absolute inset-x-0 bg-black [&>video]:h-full [&>video]:w-full [&>video]:object-contain',
+          isTheaterMode ? 'inset-y-0' : 'top-14 bottom-20',
+        )}
+      />
       <PlayerChrome
         errorLogs={errorLogs}
         hasNextEpisode={hasNextEpisode}
@@ -232,6 +256,16 @@ function isHlsSource(src: string | undefined): boolean {
 
 function readPlaylistFilteringEnabled(): boolean {
   return window.localStorage.getItem(HLS_PLAYLIST_FILTER_STORAGE_KEY) !== 'false'
+}
+
+function readStoredPlayerVolume(): number {
+  const storedVolume = window.localStorage.getItem(PLAYER_VOLUME_STORAGE_KEY)
+  if (storedVolume === null) {
+    return DEFAULT_PLAYER_VOLUME
+  }
+
+  const volume = Number(storedVolume)
+  return Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : DEFAULT_PLAYER_VOLUME
 }
 
 function getPlayerSource(src: string | undefined): PlayerSrc | undefined {

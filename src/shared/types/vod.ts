@@ -41,6 +41,17 @@ export interface PlayEpisode {
   url: string
 }
 
+export interface MediaProbeInput {
+  url: string
+  referer?: string
+  headers?: Record<string, string>
+}
+
+export interface MediaProbeResult {
+  latencyMs: number | null
+  quality: string | null
+}
+
 export interface VodApiResponse {
   code: number
   msg: string

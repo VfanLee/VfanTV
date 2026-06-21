@@ -11,6 +11,7 @@ import {
   isApiAvailable,
   isFavorite as checkIsFavorite,
   onVodSearchEvent,
+  probeMediaSource,
   removeFavorite,
   searchVod,
   upsertRecentPlay,
@@ -29,6 +30,14 @@ interface SourceRefreshState {
   found: number
   failed: number
   finished: number
+}
+
+type SourceProbeState = { status: 'loading' } | { status: 'complete'; latencyMs: number | null; quality: string | null }
+
+interface SourceProbeRequest {
+  items: VodSearchResult[]
+  lineIndex: number
+  episodeIndex: number
 }
 
 interface PlayerLocationState {
@@ -53,12 +62,15 @@ export function PlayerPage(): React.JSX.Element {
   const [favoriteResourceKey, setFavoriteResourceKey] = useState('')
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false)
   const [isTheaterMode, setIsTheaterMode] = useState(false)
+  const [sourceProbeStates, setSourceProbeStates] = useState<Record<string, SourceProbeState>>({})
+  const [sourceProbeRequest, setSourceProbeRequest] = useState<SourceProbeRequest>()
   const [refreshState, setRefreshState] = useState<SourceRefreshState>({
     found: 0,
     failed: 0,
     finished: 0,
   })
   const refreshSearchIdRef = useRef<string | undefined>(undefined)
+  const probeAfterRefreshRef = useRef(false)
   const autoHydratedTitleRef = useRef<Set<string>>(new Set())
   const lastProgressSaveRef = useRef(0)
   const playbackProgressRef = useRef({ currentTime: 0, duration: 0 })
@@ -136,24 +148,39 @@ export function PlayerPage(): React.JSX.Element {
     ? [current.year, current.area, current.category, current.remarks].filter(Boolean).join(' · ')
     : '刷新或直接进入播放页时，后续会通过 sourceId + vodId 恢复详情。'
 
-  const refreshSources = useCallback(async (): Promise<void> => {
-    if (!isApiAvailable() || !current?.title || isRefreshingSources) {
-      return
-    }
+  const refreshSources = useCallback(
+    async (shouldProbe = false): Promise<void> => {
+      if (!isApiAvailable() || !current?.title || isRefreshingSources) {
+        return
+      }
 
-    if (refreshSearchIdRef.current) {
-      await cancelVodSearch(refreshSearchIdRef.current)
-    }
+      if (refreshSearchIdRef.current) {
+        await cancelVodSearch(refreshSearchIdRef.current)
+      }
 
-    setRefreshState({ found: 0, failed: 0, finished: 0 })
-    const result = await searchVod(current.title)
-    if (!result) {
-      return
-    }
+      setRefreshState({ found: 0, failed: 0, finished: 0 })
+      probeAfterRefreshRef.current = shouldProbe
+      if (shouldProbe) {
+        setSourceProbeRequest(undefined)
+        setSourceProbeStates(
+          Object.fromEntries(sourceRows.map(({ item }) => [getCandidateKey(item), { status: 'loading' as const }])),
+        )
+      }
 
-    refreshSearchIdRef.current = result.searchId
-    setIsRefreshingSources(true)
-  }, [current, isRefreshingSources])
+      const result = await searchVod(current.title)
+      if (!result) {
+        probeAfterRefreshRef.current = false
+        if (shouldProbe) {
+          setSourceProbeStates({})
+        }
+        return
+      }
+
+      refreshSearchIdRef.current = result.searchId
+      setIsRefreshingSources(true)
+    },
+    [current, isRefreshingSources, sourceRows],
+  )
 
   useEffect(() => {
     if (!current || !isApiAvailable() || isRefreshingSources) {
@@ -295,9 +322,65 @@ export function PlayerPage(): React.JSX.Element {
       if (event.type === 'done') {
         refreshSearchIdRef.current = undefined
         setIsRefreshingSources(false)
+
+        if (probeAfterRefreshRef.current) {
+          probeAfterRefreshRef.current = false
+          const latestItems = dedupeCandidates(
+            useSearchContextStore
+              .getState()
+              .candidates.filter((item) => normalizeTitle(item.title) === currentTitleKey),
+          )
+          setSourceProbeStates(
+            Object.fromEntries(latestItems.map((item) => [getCandidateKey(item), { status: 'loading' as const }])),
+          )
+          setSourceProbeRequest({
+            items: latestItems,
+            lineIndex: activeSelection.lineIndex,
+            episodeIndex: activeSelection.episodeIndex,
+          })
+        }
       }
     })
-  }, [currentTitleKey, mergeCandidates])
+  }, [activeSelection.episodeIndex, activeSelection.lineIndex, currentTitleKey, mergeCandidates])
+
+  useEffect(() => {
+    if (!sourceProbeRequest) {
+      return
+    }
+
+    let active = true
+    const targets = sourceProbeRequest.items.map((item) => ({
+      item,
+      url: getCorrespondingEpisodeUrl(item, sourceProbeRequest.lineIndex, sourceProbeRequest.episodeIndex),
+    }))
+
+    void runWithConcurrency(targets, 4, async ({ item, url }) => {
+      const result = url
+        ? await probeMediaSource({
+            url,
+            referer: item.sourceBaseUrl,
+            headers: item.sourceHeaders,
+          })
+        : undefined
+
+      if (!active) {
+        return
+      }
+
+      setSourceProbeStates((states) => ({
+        ...states,
+        [getCandidateKey(item)]: {
+          status: 'complete',
+          latencyMs: result?.latencyMs ?? null,
+          quality: result?.quality ?? null,
+        },
+      }))
+    })
+
+    return () => {
+      active = false
+    }
+  }, [sourceProbeRequest])
 
   useEffect(() => {
     if (!current || !isApiAvailable()) {
@@ -362,25 +445,18 @@ export function PlayerPage(): React.JSX.Element {
         </header>
       ) : null}
 
-      <div
-        className={cn(
-          isTheaterMode
-            ? 'min-h-0 flex-1'
-            : 'mt-5 grid gap-6 xl:h-[80vh] xl:min-h-[520px] xl:grid-cols-[minmax(0,1fr)_380px]',
-        )}
-      >
-        <main className={cn('min-h-0 min-w-0', isTheaterMode && 'h-full')}>
+      <div className={cn(isTheaterMode ? 'min-h-0 flex-1' : 'mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]')}>
+        <main className={cn('min-h-0 min-w-0', isTheaterMode && 'flex h-full items-center justify-center')}>
           <section
             className={cn(
               'overflow-hidden bg-black',
               isTheaterMode
-                ? 'h-full'
-                : 'border-border h-[58vh] min-h-[360px] rounded-xl border shadow-sm xl:h-full xl:min-h-0',
+                ? 'aspect-video w-full max-w-[calc(100vh*16/9)]'
+                : 'border-border w-full rounded-xl border shadow-sm',
             )}
           >
             <BasicPlayer
               autoPlay
-              className="h-full"
               hasNextEpisode={hasNextEpisode}
               hasPreviousEpisode={hasPreviousEpisode}
               initialTime={initialTime}
@@ -427,9 +503,10 @@ export function PlayerPage(): React.JSX.Element {
                 <SourcesPanel
                   isRefreshing={isRefreshingSources}
                   keyword={keyword}
+                  probeStates={sourceProbeStates}
                   refreshState={refreshState}
                   rows={sourceRows}
-                  onRefresh={() => void refreshSources()}
+                  onRefresh={() => void refreshSources(true)}
                   onSelect={selectSource}
                 />
               )}
@@ -592,6 +669,7 @@ function SourcesPanel({
   keyword,
   onRefresh,
   onSelect,
+  probeStates,
   refreshState,
   rows,
 }: {
@@ -599,6 +677,7 @@ function SourcesPanel({
   keyword: string
   onRefresh: () => void
   onSelect: (item: VodSearchResult) => void
+  probeStates: Record<string, SourceProbeState>
   refreshState: SourceRefreshState
   rows: Array<{ item: VodSearchResult; count: number; isActive: boolean }>
 }): React.JSX.Element {
@@ -625,42 +704,47 @@ function SourcesPanel({
 
       {rows.length > 0 ? (
         <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 pb-2">
-          {rows.map(({ count, isActive, item }) => (
-            <button
-              key={`${item.sourceId}-${item.vodId}`}
-              className={cn(
-                'focus-visible:ring-ring grid h-auto w-full grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border p-3 text-left transition-colors outline-none focus-visible:ring-2',
-                isActive ? 'border-primary bg-accent' : 'border-border bg-muted hover:border-input',
-              )}
-              type="button"
-              onClick={() => onSelect(item)}
-            >
-              <span
+          {rows.map(({ count, isActive, item }) => {
+            const probeState = probeStates[getCandidateKey(item)]
+
+            return (
+              <button
+                key={`${item.sourceId}-${item.vodId}`}
                 className={cn(
-                  'mt-0.5 flex size-5 items-center justify-center rounded-full border',
-                  isActive ? 'border-primary text-primary' : 'border-input text-transparent',
+                  'focus-visible:ring-ring grid h-auto w-full grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border p-3 text-left transition-colors outline-none focus-visible:ring-2',
+                  isActive ? 'border-primary bg-accent' : 'border-border bg-muted hover:border-input',
                 )}
+                type="button"
+                onClick={() => onSelect(item)}
               >
-                <CheckCircle2 size={14} />
-              </span>
-              <span className="min-w-0">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="text-foreground truncate text-sm font-semibold">{item.sourceName}</span>
-                  <span className="bg-card text-primary shrink-0 rounded-xl px-1.5 py-0.5 text-xs font-semibold">
-                    缓存
+                <span
+                  className={cn(
+                    'mt-0.5 flex size-5 items-center justify-center rounded-full border',
+                    isActive ? 'border-primary text-primary' : 'border-input text-transparent',
+                  )}
+                >
+                  <CheckCircle2 size={14} />
+                </span>
+                <span className="min-w-0">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="text-foreground truncate text-sm font-semibold">{item.sourceName}</span>
+                    <span className="bg-card text-primary shrink-0 rounded-xl px-1.5 py-0.5 text-xs font-semibold">
+                      缓存
+                    </span>
+                  </span>
+                  {probeState ? <SourceProbeTags state={probeState} /> : null}
+                  <span className="text-muted-foreground mt-1 block truncate text-xs font-medium">
+                    {[item.year, item.area, item.remarks || item.category].filter(Boolean).join(' · ') ||
+                      keyword ||
+                      '同名资源'}
                   </span>
                 </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs font-medium">
-                  {[item.year, item.area, item.remarks || item.category].filter(Boolean).join(' · ') ||
-                    keyword ||
-                    '同名资源'}
+                <span className="bg-card text-muted-foreground mt-0.5 shrink-0 rounded-xl px-2 py-1 text-xs font-semibold">
+                  {count} 集
                 </span>
-              </span>
-              <span className="bg-card text-muted-foreground mt-0.5 shrink-0 rounded-xl px-2 py-1 text-xs font-semibold">
-                {count} 集
-              </span>
-            </button>
-          ))}
+              </button>
+            )
+          })}
         </div>
       ) : (
         <div className="border-input text-muted-foreground mt-4 flex h-60 items-center justify-center rounded-xl border border-dashed px-6 text-center text-sm leading-6">
@@ -669,6 +753,46 @@ function SourcesPanel({
       )}
     </section>
   )
+}
+
+function SourceProbeTags({ state }: { state: SourceProbeState }): React.JSX.Element {
+  const latencyText =
+    state.status === 'loading' ? '延迟检测中' : state.latencyMs === null ? '延迟检测失败' : `${state.latencyMs}ms`
+  const qualityText = state.status === 'loading' ? '清晰度检测中' : (state.quality ?? '清晰度检测失败')
+  const latencyClassName = getLatencyTagClassName(state)
+  const qualityClassName =
+    state.status === 'loading'
+      ? 'animate-pulse border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+      : state.quality
+        ? 'border-violet-500/30 bg-violet-500/15 text-violet-700 dark:text-violet-300'
+        : 'border-red-500/30 bg-red-500/15 text-red-700 dark:text-red-300'
+
+  return (
+    <span className="mt-2 flex flex-wrap gap-1.5">
+      <span className={cn('rounded-lg border px-1.5 py-0.5 text-[11px] font-semibold', latencyClassName)}>
+        {latencyText}
+      </span>
+      <span className={cn('rounded-lg border px-1.5 py-0.5 text-[11px] font-semibold', qualityClassName)}>
+        {qualityText}
+      </span>
+    </span>
+  )
+}
+
+function getLatencyTagClassName(state: SourceProbeState): string {
+  if (state.status === 'loading') {
+    return 'animate-pulse border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+  }
+
+  if (state.latencyMs === null || state.latencyMs > 1000) {
+    return 'border-red-500/30 bg-red-500/15 text-red-700 dark:text-red-300'
+  }
+
+  if (state.latencyMs > 500) {
+    return 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+  }
+
+  return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
 }
 
 function getPlayLines(item: VodSearchResult | undefined): PlayLine[] {
@@ -763,6 +887,20 @@ function getEpisodeCount(item: VodSearchResult): number {
   return getPlayLines(item).reduce((total, line) => total + line.episodes.length, 0)
 }
 
+function getCorrespondingEpisodeUrl(
+  item: VodSearchResult,
+  lineIndex: number,
+  episodeIndex: number,
+): string | undefined {
+  const lines = getPlayLines(item)
+  const targetLine = lines[Math.min(Math.max(0, lineIndex), Math.max(0, lines.length - 1))]
+  if (!targetLine) {
+    return undefined
+  }
+
+  return targetLine.episodes[Math.min(Math.max(0, episodeIndex), targetLine.episodes.length - 1)]?.url
+}
+
 function isPlayableUrl(url: string): boolean {
   return /^https?:\/\//.test(url) && /\.m3u8(?:[?#]|$)/i.test(url)
 }
@@ -771,10 +909,29 @@ function dedupeCandidates(items: VodSearchResult[]): VodSearchResult[] {
   const map = new Map<string, VodSearchResult>()
 
   for (const item of items) {
-    map.set(`${item.sourceId}:${item.vodId}`, item)
+    map.set(getCandidateKey(item), item)
   }
 
   return Array.from(map.values())
+}
+
+function getCandidateKey(item: VodSearchResult): string {
+  return `${item.sourceId}:${item.vodId}`
+}
+
+async function runWithConcurrency<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>): Promise<void> {
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex]
+      nextIndex += 1
+      if (item) {
+        await task(item)
+      }
+    }
+  })
+
+  await Promise.all(workers)
 }
 
 function getVodDetailItems(item: VodSearchResult | undefined): Array<{ label: string; value: string }> {
