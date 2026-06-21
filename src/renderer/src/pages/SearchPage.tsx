@@ -21,7 +21,6 @@ interface GroupedSearchResult {
   title: string
   poster?: string
   posterBaseUrl?: string
-  posterHeaders?: Record<string, string>
   meta: string
   remarks?: string
   items: VodSearchResult[]
@@ -352,7 +351,6 @@ function GroupedResults({
           <MediaPoster
             baseUrl={group.posterBaseUrl}
             className="aspect-[2/3] rounded-xl"
-            headers={group.posterHeaders}
             poster={group.poster}
             title={group.title}
           />
@@ -435,7 +433,6 @@ function SourceResultButton({ item, onClick }: { item: VodSearchResult; onClick:
       <MediaPoster
         baseUrl={item.sourceBaseUrl}
         className="aspect-[2/3] rounded-xl"
-        headers={item.sourceHeaders}
         poster={item.poster}
         title={item.title}
       />
@@ -481,14 +478,14 @@ function SearchEmptyState(): React.JSX.Element {
 
 function ResultPlaceholder({ isSearching }: { isSearching: boolean }): React.JSX.Element {
   return (
-    <div className="border-input bg-card flex h-72 items-center justify-center rounded-xl border border-dashed">
+    <div className="border-input bg-card flex h-72 items-center justify-center rounded-xl">
       <div className="text-center">
         {isSearching ? (
           <Loader2 className="text-primary mx-auto animate-spin" size={30} />
         ) : (
           <AlertCircle className="text-muted-foreground mx-auto" size={30} />
         )}
-        <div className="text-foreground mt-3 text-sm font-semibold">
+        <div className="text-muted-foreground mt-3 text-sm font-semibold">
           {isSearching ? '正在等待数据源返回' : '还没有可展示的结果'}
         </div>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -512,7 +509,6 @@ function groupSearchResults(items: VodSearchResult[]): GroupedSearchResult[] {
       if (!current.poster && item.poster) {
         current.poster = item.poster
         current.posterBaseUrl = item.sourceBaseUrl
-        current.posterHeaders = item.sourceHeaders
       }
       current.remarks ||= item.remarks
       continue
@@ -523,7 +519,6 @@ function groupSearchResults(items: VodSearchResult[]): GroupedSearchResult[] {
       title: item.title,
       poster: item.poster,
       posterBaseUrl: item.sourceBaseUrl,
-      posterHeaders: item.sourceHeaders,
       meta: formatMeta(item),
       remarks: item.remarks,
       items: [item],

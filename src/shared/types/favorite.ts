@@ -3,7 +3,6 @@ export interface FavoriteItem {
   sourceId: string
   sourceName: string
   sourceBaseUrl?: string
-  sourceHeaders?: Record<string, string>
   vodId: string
   title: string
   poster?: string

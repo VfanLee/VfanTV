@@ -5,6 +5,7 @@ import type {
   VodSourceImportPreview,
   VodSourceImportResult,
   VodSourceInput,
+  VodSourceSubscriptionResult,
 } from './source'
 import type { AppSettings } from './settings'
 import type { FavoriteInput, FavoriteItem } from './favorite'
@@ -57,10 +58,12 @@ export interface AppApi {
     update: (id: string, input: VodSourceInput) => Promise<VodSourceConfig>
     reorder: (sourceIds: string[]) => Promise<VodSourceConfig[]>
     delete: (id: string) => Promise<void>
+    clear: () => Promise<void>
     previewImport: (payload: unknown) => Promise<VodSourceImportPreview>
     confirmImport: (payload: unknown) => Promise<VodSourceImportResult>
     importFromFile: () => Promise<VodSourceFileResult>
     exportToFile: () => Promise<VodSourceExportResult>
+    syncSubscription: (url: string) => Promise<VodSourceSubscriptionResult>
   }
   home: {
     get: () => Promise<HomeData>

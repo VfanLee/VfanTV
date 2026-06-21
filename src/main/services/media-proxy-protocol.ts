@@ -14,7 +14,7 @@ export function registerMediaProxyProtocol(): void {
     }
 
     const referer = proxyUrl.searchParams.get('referer') ?? undefined
-    const headers = getHeaders(proxyUrl.searchParams.get('headers'), referer)
+    const headers = getHeaders(referer)
 
     try {
       const upstream = await axios.get<ArrayBuffer>(targetUrl, {
@@ -29,7 +29,7 @@ export function registerMediaProxyProtocol(): void {
       const status = normalizeStatus(upstream.status)
 
       if (isPlaylist(targetUrl, contentType)) {
-        const rewrittenPlaylist = rewritePlaylist(body.toString('utf-8'), targetUrl, referer, headers)
+        const rewrittenPlaylist = rewritePlaylist(body.toString('utf-8'), targetUrl, referer)
 
         return new Response(rewrittenPlaylist, {
           status,
@@ -74,7 +74,7 @@ function getResponseHeader(headers: RawAxiosResponseHeaders | AxiosResponseHeade
   return Array.isArray(value) ? value.join(', ') : String(value)
 }
 
-function getHeaders(rawHeaders: string | null, referer: string | undefined): Record<string, string> {
+function getHeaders(referer: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
@@ -89,24 +89,6 @@ function getHeaders(rawHeaders: string | null, referer: string | undefined): Rec
     }
   }
 
-  if (!rawHeaders) {
-    return headers
-  }
-
-  try {
-    const parsed = JSON.parse(rawHeaders) as unknown
-
-    if (typeof parsed === 'object' && parsed !== null) {
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === 'string') {
-          headers[key] = value
-        }
-      }
-    }
-  } catch {
-    return headers
-  }
-
   return headers
 }
 
@@ -117,12 +99,7 @@ function isPlaylist(url: string, contentType: string): boolean {
   )
 }
 
-function rewritePlaylist(
-  playlist: string,
-  playlistUrl: string,
-  referer: string | undefined,
-  headers: Record<string, string>,
-): string {
+function rewritePlaylist(playlist: string, playlistUrl: string, referer: string | undefined): string {
   return playlist
     .split('\n')
     .map((line) => {
@@ -133,31 +110,24 @@ function rewritePlaylist(
       }
 
       if (trimmedLine.startsWith('#')) {
-        return rewritePlaylistTagUri(line, playlistUrl, referer, headers)
+        return rewritePlaylistTagUri(line, playlistUrl, referer)
       }
 
       const segmentUrl = new URL(trimmedLine, playlistUrl).toString()
       return createMediaProxyUrl({
         url: segmentUrl,
         referer,
-        headers,
       })
     })
     .join('\n')
 }
 
-function rewritePlaylistTagUri(
-  line: string,
-  playlistUrl: string,
-  referer: string | undefined,
-  headers: Record<string, string>,
-): string {
+function rewritePlaylistTagUri(line: string, playlistUrl: string, referer: string | undefined): string {
   return line.replace(/URI="([^"]+)"/g, (_match, rawUri: string) => {
     const keyUrl = new URL(rawUri, playlistUrl).toString()
     const proxiedKeyUrl = createMediaProxyUrl({
       url: keyUrl,
       referer,
-      headers,
     })
 
     return `URI="${proxiedKeyUrl}"`

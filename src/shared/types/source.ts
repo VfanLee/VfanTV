@@ -2,7 +2,20 @@ export interface VodSourceImportItem {
   name: string
   baseUrl: string
   enabled?: boolean
-  headers?: Record<string, string>
+}
+
+export interface VodSourceExportItem {
+  name: string
+  baseUrl: string
+  enabled: boolean
+}
+
+export type VodSourceOrigin = 'manual' | 'subscription'
+
+export interface VodSourceSubscriptionItem {
+  name: string
+  baseUrl: string
+  enabled?: boolean
 }
 
 export interface VodSourceConfig {
@@ -11,7 +24,7 @@ export interface VodSourceConfig {
   baseUrl: string
   enabled: boolean
   sort: number
-  headers: Record<string, string>
+  origin: VodSourceOrigin
   remark?: string
   createdAt: number
   updatedAt: number
@@ -47,4 +60,10 @@ export interface VodSourceExportResult {
   filePath?: string
   count: number
   cancelled: boolean
+}
+
+export interface VodSourceSubscriptionResult {
+  created: number
+  updated: number
+  unchanged: number
 }

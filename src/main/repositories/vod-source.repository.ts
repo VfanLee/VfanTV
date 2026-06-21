@@ -39,7 +39,7 @@ export class VodSourceRepository {
           name: source.name,
           enabled: source.enabled,
           sort: source.sort,
-          headers: source.headers,
+          origin: source.origin,
           remark: source.remark,
           updatedAt: source.updatedAt,
         },
@@ -56,8 +56,21 @@ export class VodSourceRepository {
         name: source.name,
         baseUrl: source.baseUrl,
         enabled: source.enabled,
-        headers: source.headers,
         remark: source.remark,
+        updatedAt: source.updatedAt,
+      })
+      .where(eq(vodSourcesTable.id, source.id))
+      .run()
+
+    return this.findById(source.id) ?? source
+  }
+
+  updateFromSubscription(source: VodSourceConfig): VodSourceConfig {
+    this.db
+      .update(vodSourcesTable)
+      .set({
+        name: source.name,
+        origin: 'subscription',
         updatedAt: source.updatedAt,
       })
       .where(eq(vodSourcesTable.id, source.id))
@@ -80,5 +93,9 @@ export class VodSourceRepository {
 
   delete(id: string): void {
     this.db.delete(vodSourcesTable).where(eq(vodSourcesTable.id, id)).run()
+  }
+
+  clear(): void {
+    this.db.delete(vodSourcesTable).run()
   }
 }

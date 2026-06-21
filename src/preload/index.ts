@@ -9,10 +9,12 @@ const api: AppApi = {
     update: (id, input) => ipcRenderer.invoke('sources:update', id, input),
     reorder: (sourceIds) => ipcRenderer.invoke('sources:reorder', sourceIds),
     delete: (id) => ipcRenderer.invoke('sources:delete', id),
+    clear: () => ipcRenderer.invoke('sources:clear'),
     previewImport: (payload) => ipcRenderer.invoke('sources:preview-import', payload),
     confirmImport: (payload) => ipcRenderer.invoke('sources:confirm-import', payload),
     importFromFile: () => ipcRenderer.invoke('sources:import-from-file'),
     exportToFile: () => ipcRenderer.invoke('sources:export-to-file'),
+    syncSubscription: (url) => ipcRenderer.invoke('sources:sync-subscription', url),
   },
   home: {
     get: () => ipcRenderer.invoke('home:get'),

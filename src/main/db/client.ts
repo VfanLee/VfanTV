@@ -29,7 +29,7 @@ export function createDatabase(): AppDatabase {
       base_url TEXT NOT NULL UNIQUE,
       enabled INTEGER NOT NULL,
       sort INTEGER NOT NULL,
-      headers TEXT NOT NULL,
+      origin TEXT NOT NULL DEFAULT 'manual',
       remark TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -57,7 +57,6 @@ export function createDatabase(): AppDatabase {
       source_id TEXT NOT NULL,
       source_name TEXT NOT NULL,
       source_base_url TEXT,
-      source_headers TEXT,
       vod_id TEXT NOT NULL,
       title TEXT NOT NULL,
       poster TEXT,
@@ -78,8 +77,19 @@ export function createDatabase(): AppDatabase {
   ensureColumn(sqlite, 'recent_plays', 'current_time', 'INTEGER NOT NULL DEFAULT 0')
   ensureColumn(sqlite, 'recent_plays', 'duration', 'INTEGER NOT NULL DEFAULT 0')
   ensureColumn(sqlite, 'recent_plays', 'raw_json', 'TEXT')
+  ensureColumn(sqlite, 'vod_sources', 'origin', "TEXT NOT NULL DEFAULT 'manual'")
+  dropColumnIfExists(sqlite, 'vod_sources', 'headers')
+  dropColumnIfExists(sqlite, 'favorites', 'source_headers')
 
   return drizzle(sqlite, { schema })
+}
+
+function dropColumnIfExists(sqlite: Database.Database, tableName: string, columnName: string): void {
+  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+
+  if (columns.some((column) => column.name === columnName)) {
+    sqlite.exec(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+  }
 }
 
 function ensureColumn(sqlite: Database.Database, tableName: string, columnName: string, definition: string): void {

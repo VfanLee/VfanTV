@@ -60,7 +60,7 @@ export function FavoritesPage(): React.JSX.Element {
         </header>
 
         {items.length > 0 ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] items-start gap-x-6 gap-y-9">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,194px))] items-start gap-x-6 gap-y-9">
             {items.map((item) => (
               <FavoriteCard
                 key={item.id}
@@ -74,10 +74,12 @@ export function FavoritesPage(): React.JSX.Element {
             ))}
           </div>
         ) : (
-          <div className="border-input bg-card flex h-72 items-center justify-center rounded-xl border border-dashed">
+          <div className="border-input bg-card flex h-72 items-center justify-center rounded-xl">
             <div className="text-center">
               <Search className="text-muted-foreground mx-auto" size={28} />
-              <div className="mt-3 text-sm font-semibold">{isLoading ? '正在加载收藏' : '还没有收藏内容'}</div>
+              <div className="text-muted-foreground mt-3 text-sm font-semibold">
+                {isLoading ? '正在加载收藏' : '还没有收藏内容'}
+              </div>
             </div>
           </div>
         )}
@@ -105,7 +107,6 @@ function FavoriteCard({
         <MediaPoster
           baseUrl={item.sourceBaseUrl}
           className="aspect-[2/3]"
-          headers={item.sourceHeaders}
           poster={item.poster}
           title={item.title}
           overlay={<PosterPlayOverlay />}
@@ -116,7 +117,7 @@ function FavoriteCard({
         </p>
       </button>
       <button
-        className="bg-background/85 text-muted-foreground hover:bg-destructive focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100 hover:text-white focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
         type="button"
         title="删除收藏"
         onClick={onDelete}

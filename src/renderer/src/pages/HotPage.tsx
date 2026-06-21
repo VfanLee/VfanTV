@@ -92,7 +92,7 @@ export function HotPage(): React.JSX.Element {
           </div>
         </header>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] items-start gap-x-6 gap-y-9">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,194px))] items-start gap-x-6 gap-y-9">
           {categoryCache.items.map((item) => (
             <HotCard
               key={`${item.category}-${item.id}`}
@@ -132,11 +132,11 @@ function HotCard({ item, onClick }: { item: RecommendationItem; onClick: () => v
 
   return (
     <button
-      className="focus-visible:ring-ring focus-visible:ring-offset-background min-w-0 self-start rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      className="group focus-visible:ring-ring focus-visible:ring-offset-background min-w-0 self-start rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
       type="button"
       onClick={onClick}
     >
-      <MediaPoster className="aspect-[2/3]" poster={item.poster} title={item.title} />
+      <MediaPoster className="aspect-[2/3]" poster={item.poster} showHoverScrim={false} title={item.title} />
       <div className="mt-3 min-w-0">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-foreground min-w-0 truncate text-[15px] font-semibold">{item.title}</h2>

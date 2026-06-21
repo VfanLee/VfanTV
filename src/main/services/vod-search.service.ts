@@ -90,7 +90,6 @@ export class VodSearchService {
 
     try {
       const response = await this.httpClient.get(buildVodSearchUrl(source.baseUrl, keyword), {
-        headers: source.headers,
         signal,
         timeout: SOURCE_TIMEOUT_MS,
       })

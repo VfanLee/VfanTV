@@ -3,7 +3,6 @@ const DOUBAN_IMAGE_REFERER = 'https://movie.douban.com/explore'
 
 export interface ImageProxyOptions {
   baseUrl?: string
-  headers?: Record<string, string>
 }
 
 export function isDoubanImageUrl(url: string): boolean {
@@ -30,10 +29,6 @@ export function resolveImageUrl(url: string, options: ImageProxyOptions = {}): s
     'referer',
     isDoubanImageUrl(targetUrl.toString()) ? DOUBAN_IMAGE_REFERER : (options.baseUrl ?? targetUrl.origin),
   )
-
-  if (options.headers && Object.keys(options.headers).length > 0) {
-    proxyUrl.searchParams.set('headers', JSON.stringify(options.headers))
-  }
 
   return proxyUrl.toString()
 }

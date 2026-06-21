@@ -16,6 +16,7 @@ import { probeMediaSource } from '../services/media-probe.service'
 import { SearchTaskManager } from '../services/search-task-manager'
 import { SettingsService } from '../services/settings.service'
 import { SourceService } from '../services/source.service'
+import { decodeBase58String } from '../services/base58'
 import { VodSearchService } from '../services/vod-search.service'
 import { checkLatestRelease } from '../services/update-checker'
 
@@ -54,6 +55,7 @@ export function registerIpcHandlers(): void {
     sourceService.reorder(sourceIds),
   )
   ipcMain.handle('sources:delete', (_event, id: string) => sourceService.delete(id))
+  ipcMain.handle('sources:clear', () => sourceService.clear())
   ipcMain.handle('sources:preview-import', (_event, payload: Parameters<AppApi['sources']['previewImport']>[0]) =>
     sourceService.previewImport(payload),
   )
@@ -109,6 +111,31 @@ export function registerIpcHandlers(): void {
       count: items.length,
     }
   })
+  ipcMain.handle(
+    'sources:sync-subscription',
+    async (_event, url: Parameters<AppApi['sources']['syncSubscription']>[0]) => {
+      const parsedUrl = new URL(url)
+
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error('订阅地址仅支持 HTTP 或 HTTPS')
+      }
+
+      const encoded = await httpClient.get<string>(parsedUrl.toString(), {
+        responseType: 'text',
+        maxContentLength: 2 * 1024 * 1024,
+      })
+      const decoded = decodeBase58String(encoded)
+
+      try {
+        return sourceService.syncSubscription(JSON.parse(decoded))
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw new Error('订阅内容解码后不是有效的 JSON')
+        }
+        throw error
+      }
+    },
+  )
 
   ipcMain.handle('home:get', () => homeService.get())
   ipcMain.handle('home:get-hot', (_event, input: Parameters<AppApi['home']['getHot']>[0]) =>

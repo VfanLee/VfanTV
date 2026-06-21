@@ -16,9 +16,5 @@ export function createMediaProxyUrl(input: MediaProxyRequest): string {
     proxyUrl.searchParams.set('referer', input.referer)
   }
 
-  if (input.headers && Object.keys(input.headers).length > 0) {
-    proxyUrl.searchParams.set('headers', JSON.stringify(input.headers))
-  }
-
   return proxyUrl.toString()
 }

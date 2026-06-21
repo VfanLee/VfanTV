@@ -14,7 +14,9 @@ export const vodSourcesTable = sqliteTable(
     baseUrl: text('base_url').notNull(),
     enabled: integer('enabled', { mode: 'boolean' }).notNull(),
     sort: integer('sort').notNull(),
-    headers: text('headers', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+    origin: text('origin', { enum: ['manual', 'subscription'] })
+      .notNull()
+      .default('manual'),
     remark: text('remark'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
@@ -51,7 +53,6 @@ export const favoritesTable = sqliteTable(
     sourceId: text('source_id').notNull(),
     sourceName: text('source_name').notNull(),
     sourceBaseUrl: text('source_base_url'),
-    sourceHeaders: text('source_headers', { mode: 'json' }).$type<Record<string, string>>(),
     vodId: text('vod_id').notNull(),
     title: text('title').notNull(),
     poster: text('poster'),

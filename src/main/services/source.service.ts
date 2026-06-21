@@ -1,11 +1,13 @@
 import { randomUUID } from 'crypto'
-import { vodSourceImportItemSchema, vodSourceInputSchema } from '@shared/schemas'
+import { vodSourceImportItemSchema, vodSourceInputSchema, vodSourceSubscriptionSchema } from '@shared/schemas'
 import type {
   VodSourceConfig,
+  VodSourceExportItem,
   VodSourceInput,
   VodSourceImportItem,
   VodSourceImportPreview,
   VodSourceImportResult,
+  VodSourceSubscriptionResult,
 } from '@shared/types'
 import type { VodSourceRepository } from '../repositories/vod-source.repository'
 
@@ -56,7 +58,7 @@ export class SourceService {
       baseUrl: data.baseUrl,
       enabled: data.enabled,
       sort: this.repository.list().length,
-      headers: {},
+      origin: 'manual',
       createdAt: now,
       updatedAt: now,
     })
@@ -111,7 +113,11 @@ export class SourceService {
     this.repository.delete(id)
   }
 
-  exportItems(): VodSourceImportItem[] {
+  clear(): void {
+    this.repository.clear()
+  }
+
+  exportItems(): VodSourceExportItem[] {
     return this.repository.list().map((source) => ({
       name: source.name,
       baseUrl: source.baseUrl,
@@ -166,7 +172,7 @@ export class SourceService {
         baseUrl: item.baseUrl,
         enabled: item.enabled ?? false,
         sort: existing?.sort ?? nextSort + index,
-        headers: item.headers ?? {},
+        origin: 'manual',
         remark: existing?.remark,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
@@ -186,5 +192,49 @@ export class SourceService {
       skipped: preview.skippedItems,
       invalid: preview.invalidItems,
     }
+  }
+
+  syncSubscription(payload: unknown): VodSourceSubscriptionResult {
+    const items = vodSourceSubscriptionSchema.parse(payload)
+    const uniqueItems = new Map(items.map((item) => [item.baseUrl, item]))
+    const now = Date.now()
+    let created = 0
+    let updated = 0
+    let unchanged = 0
+
+    for (const item of uniqueItems.values()) {
+      const existing = this.repository.findByBaseUrl(item.baseUrl)
+      if (!existing) {
+        this.repository.upsert({
+          id: randomUUID(),
+          name: item.name,
+          baseUrl: item.baseUrl,
+          enabled: item.enabled ?? false,
+          sort: this.repository.list().length,
+          origin: 'subscription',
+          createdAt: now,
+          updatedAt: now,
+        })
+        created += 1
+        continue
+      }
+
+      const changed = existing.name !== item.name || existing.origin !== 'subscription'
+
+      if (!changed) {
+        unchanged += 1
+        continue
+      }
+
+      this.repository.updateFromSubscription({
+        ...existing,
+        name: item.name,
+        origin: 'subscription',
+        updatedAt: now,
+      })
+      updated += 1
+    }
+
+    return { created, updated, unchanged }
   }
 }

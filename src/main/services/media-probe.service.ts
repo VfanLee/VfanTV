@@ -19,7 +19,6 @@ export async function probeMediaSource(input: MediaProbeInput): Promise<MediaPro
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
         'Accept': 'application/vnd.apple.mpegurl, application/x-mpegurl, */*',
         ...(input.referer ? { Referer: input.referer } : {}),
-        ...input.headers,
       },
       maxContentLength: MAX_PLAYLIST_BYTES,
       responseType: 'text',

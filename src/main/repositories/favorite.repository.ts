@@ -9,7 +9,6 @@ function toFavoriteItem(row: FavoriteRow): FavoriteItem {
   return {
     ...row,
     sourceBaseUrl: row.sourceBaseUrl ?? undefined,
-    sourceHeaders: row.sourceHeaders ?? undefined,
     poster: row.poster ?? undefined,
     year: row.year ?? undefined,
     area: row.area ?? undefined,
@@ -56,7 +55,6 @@ export class FavoriteRepository {
         set: {
           sourceName: item.sourceName,
           sourceBaseUrl: item.sourceBaseUrl,
-          sourceHeaders: item.sourceHeaders,
           title: item.title,
           poster: item.poster,
           year: item.year,

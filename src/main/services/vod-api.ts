@@ -67,7 +67,6 @@ function normalizeVodItem(item: VodApiItem, source: VodSourceConfig): VodSearchR
     sourceId: source.id,
     sourceName: source.name,
     sourceBaseUrl: source.baseUrl,
-    sourceHeaders: source.headers,
     vodId: getString(item.vod_id),
     title: getString(item.vod_name),
     subtitle: getOptionalString(item.vod_sub),

@@ -362,7 +362,6 @@ export function PlayerPage(): React.JSX.Element {
         ? await probeMediaSource({
             url,
             referer: item.sourceBaseUrl,
-            headers: item.sourceHeaders,
           })
         : undefined
 
@@ -525,7 +524,6 @@ export function PlayerPage(): React.JSX.Element {
           <MediaPoster
             baseUrl={current?.sourceBaseUrl}
             className="float-left mr-6 mb-4 aspect-[2/3] w-[clamp(11rem,18vw,14rem)]"
-            headers={current?.sourceHeaders}
             overlay={
               doubanScore ? (
                 <span className="absolute top-2 right-2 rounded-lg bg-black/75 px-2 py-1 text-xs font-semibold text-amber-300 shadow-sm backdrop-blur">
@@ -1031,7 +1029,6 @@ function createFavoriteInput(item: VodSearchResult): FavoriteInput {
     sourceId: item.sourceId,
     sourceName: item.sourceName,
     sourceBaseUrl: item.sourceBaseUrl,
-    sourceHeaders: item.sourceHeaders,
     vodId: item.vodId,
     title: item.title,
     poster: item.poster,

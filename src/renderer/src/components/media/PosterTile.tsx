@@ -4,16 +4,15 @@ import { resolveImageUrl } from '@shared/utils/media-image'
 
 interface PosterTileProps {
   baseUrl?: string
-  headers?: Record<string, string>
   title: string
   subtitle?: string
   poster?: string
   meta?: string
 }
 
-export function PosterTile({ baseUrl, headers, title, subtitle, poster, meta }: PosterTileProps): React.JSX.Element {
+export function PosterTile({ baseUrl, title, subtitle, poster, meta }: PosterTileProps): React.JSX.Element {
   const [failedPoster, setFailedPoster] = useState<string>()
-  const imageSrc = poster && poster !== failedPoster ? resolveImageUrl(poster, { baseUrl, headers }) : undefined
+  const imageSrc = poster && poster !== failedPoster ? resolveImageUrl(poster, { baseUrl }) : undefined
 
   return (
     <article className="w-36 shrink-0">

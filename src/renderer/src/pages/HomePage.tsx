@@ -206,7 +206,7 @@ function RecentPlayCard({
         </div>
       </button>
       <button
-        className="bg-background/85 text-muted-foreground hover:bg-destructive focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100 hover:text-white focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
         type="button"
         title="删除播放记录"
         onClick={onDelete}
@@ -233,7 +233,7 @@ function RecommendationCard({ item, onClick }: { item: RecommendationItem; onCli
       onClick={onClick}
     >
       <div className="relative">
-        <MediaPoster className="aspect-[2/3]" poster={item.poster} title={item.title} />
+        <MediaPoster className="aspect-[2/3]" poster={item.poster} showHoverScrim={false} title={item.title} />
         {item.isNew ? (
           <span className="bg-primary text-primary-foreground absolute top-2 right-2 rounded-xl px-2 py-1 text-xs font-semibold shadow-sm">
             新
@@ -297,9 +297,9 @@ function formatRating(rating: number | undefined): string {
 
 function EmptyShelf({ description, title }: { description: string; title: string }): React.JSX.Element {
   return (
-    <div className="border-input bg-card flex h-36 items-center justify-center rounded-xl border border-dashed">
+    <div className="border-input bg-card flex h-36 items-center justify-center rounded-xl">
       <div className="text-center">
-        <div className="text-foreground text-sm font-semibold">{title}</div>
+        <div className="text-muted-foreground text-sm font-semibold">{title}</div>
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>
       </div>
     </div>

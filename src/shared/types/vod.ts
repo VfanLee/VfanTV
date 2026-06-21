@@ -2,7 +2,6 @@ export interface VodSearchResult {
   sourceId: string
   sourceName: string
   sourceBaseUrl?: string
-  sourceHeaders?: Record<string, string>
   vodId: string
   title: string
   subtitle?: string
@@ -44,7 +43,6 @@ export interface PlayEpisode {
 export interface MediaProbeInput {
   url: string
   referer?: string
-  headers?: Record<string, string>
 }
 
 export interface MediaProbeResult {

@@ -5,6 +5,7 @@ import type {
   VodSourceImportPreview,
   VodSourceImportResult,
   VodSourceInput,
+  VodSourceSubscriptionResult,
 } from '@shared/types'
 import { getRuntimeApi, requireRuntimeApi } from './client'
 
@@ -29,6 +30,10 @@ export async function deleteSource(id: string): Promise<void> {
   await requireRuntimeApi().sources.delete(id)
 }
 
+export async function clearSources(): Promise<void> {
+  await requireRuntimeApi().sources.clear()
+}
+
 export async function previewSourceImport(payload: unknown): Promise<VodSourceImportPreview> {
   return requireRuntimeApi().sources.previewImport(payload)
 }
@@ -43,4 +48,8 @@ export async function importSourcesFromFile(): Promise<VodSourceFileResult> {
 
 export async function exportSourcesToFile(): Promise<VodSourceExportResult> {
   return requireRuntimeApi().sources.exportToFile()
+}
+
+export async function syncSourceSubscription(url: string): Promise<VodSourceSubscriptionResult> {
+  return requireRuntimeApi().sources.syncSubscription(url)
 }

@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Check, Download, GripVertical, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { Check, Download, GripVertical, Pencil, Plus, RefreshCw, Rss, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VodSourceConfig, VodSourceInput } from '@shared/types'
 import { Badge, Button, Input, SettingsCard, Switch, ThemeSettings } from '@renderer/components'
 import {
+  clearSources,
   createSource,
   deleteSource,
   exportSourcesToFile,
+  getSettings,
   importSourcesFromFile,
   isApiAvailable,
   listSources,
   reorderSources,
+  syncSourceSubscription,
+  updateSettings,
   updateSource,
 } from '@renderer/services/api'
 
@@ -31,9 +35,12 @@ export function SettingsPage(): React.JSX.Element {
   const [sources, setSources] = useState<VodSourceConfig[]>([])
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set())
   const [isBatchUpdating, setIsBatchUpdating] = useState(false)
+  const [isClearingSources, setIsClearingSources] = useState(false)
   const [draggedSourceId, setDraggedSourceId] = useState<string>()
   const [dragOverSourceId, setDragOverSourceId] = useState<string>()
   const [isReordering, setIsReordering] = useState(false)
+  const [subscriptionUrl, setSubscriptionUrl] = useState('')
+  const [isSyncingSubscription, setIsSyncingSubscription] = useState(false)
   const [dialog, setDialog] = useState<SourceDialogState>()
   const apiAvailable = isApiAvailable()
   const enabledCount = sources.filter((source) => source.enabled).length
@@ -52,16 +59,38 @@ export function SettingsPage(): React.JSX.Element {
   useEffect(() => {
     let active = true
 
-    void listSources().then((nextSources) => {
-      if (active) {
-        setSources(nextSources)
-      }
+    void Promise.all([listSources(), getSettings()]).then(([nextSources, settings]) => {
+      if (!active) return
+      setSources(nextSources)
+      setSubscriptionUrl(settings?.subscriptionUrl ?? '')
     })
 
     return () => {
       active = false
     }
   }, [])
+
+  const syncSubscription = async (): Promise<void> => {
+    const url = subscriptionUrl.trim()
+
+    if (!apiAvailable || !url) return
+
+    setIsSyncingSubscription(true)
+    try {
+      const result = await syncSourceSubscription(url)
+      await updateSettings({ subscriptionUrl: url })
+      await refreshSources()
+      toast.success('订阅同步完成', {
+        description: `新增 ${result.created}，更新 ${result.updated}，未变化 ${result.unchanged}`,
+      })
+    } catch (error) {
+      toast.error('订阅同步失败', {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setIsSyncingSubscription(false)
+    }
+  }
 
   const importSources = async (): Promise<void> => {
     if (!apiAvailable) {
@@ -111,6 +140,27 @@ export function SettingsPage(): React.JSX.Element {
       toast.error('导出失败', {
         description: error instanceof Error ? error.message : String(error),
       })
+    }
+  }
+
+  const clearAllSources = async (): Promise<void> => {
+    if (!apiAvailable || sources.length === 0) return
+
+    if (!window.confirm(`确定清空全部 ${sources.length} 个数据源吗？此操作不可恢复。`)) {
+      return
+    }
+
+    setIsClearingSources(true)
+    try {
+      await clearSources()
+      applySources([])
+      toast.success('已清空全部数据源')
+    } catch (error) {
+      toast.error('清空失败', {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setIsClearingSources(false)
     }
   }
 
@@ -250,6 +300,33 @@ export function SettingsPage(): React.JSX.Element {
       <div className="grid gap-5">
         <ThemeSettings />
 
+        <SettingsCard description="同步后会新增或更新订阅来源的数据源。" title="订阅源管理">
+          <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-end">
+            <label className="min-w-0 flex-1">
+              <span className="text-foreground mb-2 block text-sm font-medium">订阅地址</span>
+              <Input
+                disabled={!apiAvailable || isSyncingSubscription}
+                placeholder="https://example.com/subscription"
+                type="url"
+                value={subscriptionUrl}
+                onChange={(event) => setSubscriptionUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void syncSubscription()
+                }}
+              />
+            </label>
+            <Button
+              className="sm:min-w-24"
+              disabled={!apiAvailable || !subscriptionUrl.trim() || isSyncingSubscription}
+              variant="primary"
+              onClick={() => void syncSubscription()}
+            >
+              {isSyncingSubscription ? <RefreshCw className="animate-spin" size={16} /> : <Rss size={16} />}
+              {isSyncingSubscription ? '同步中' : '同步'}
+            </Button>
+          </div>
+        </SettingsCard>
+
         <SettingsCard
           description="管理应用的数据源，拖拽可调整顺序。"
           headerActions={
@@ -265,13 +342,13 @@ export function SettingsPage(): React.JSX.Element {
               disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
               onClick={() => void batchToggleSources(true)}
             >
-              一键开启{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
+              批量开启{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
             </Button>
             <Button
               disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
               onClick={() => void batchToggleSources(false)}
             >
-              一键关闭{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
+              批量关闭{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
             </Button>
 
             <div className="ml-auto" />
@@ -287,12 +364,20 @@ export function SettingsPage(): React.JSX.Element {
               <Plus size={16} />
               添加数据源
             </Button>
+            <Button
+              disabled={!apiAvailable || sources.length === 0 || isClearingSources}
+              variant="danger"
+              onClick={() => void clearAllSources()}
+            >
+              <Trash2 size={16} />
+              {isClearingSources ? '清空中' : '清空'}
+            </Button>
           </div>
 
           {sources.length > 0 ? (
             <div className="h-[460px] overflow-auto">
               <div className="min-w-[820px]">
-                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-3 font-medium">
+                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[32px_40px_1.1fr_2fr_80px_112px_132px] items-center border-b px-5 py-3 font-medium">
                   <div aria-hidden="true" />
                   <SelectionCheckbox
                     checked={allSelected}
@@ -301,13 +386,14 @@ export function SettingsPage(): React.JSX.Element {
                   />
                   <div>名称</div>
                   <div>URL</div>
+                  <div>来源</div>
                   <div>状态</div>
                   <div className="text-right">操作</div>
                 </div>
                 {sources.map((source) => (
                   <div
                     key={source.id}
-                    className={`border-border grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-4 transition-colors last:border-b-0 ${
+                    className={`border-border grid grid-cols-[32px_40px_1.1fr_2fr_80px_112px_132px] items-center border-b px-5 py-4 transition-colors last:border-b-0 ${
                       draggedSourceId === source.id
                         ? 'opacity-55'
                         : dragOverSourceId === source.id
@@ -350,6 +436,9 @@ export function SettingsPage(): React.JSX.Element {
                       <div className="text-foreground truncate text-sm font-medium">{source.name}</div>
                     </div>
                     <div className="text-muted-foreground min-w-0 truncate font-mono text-xs">{source.baseUrl}</div>
+                    <div>
+                      <Badge>{source.origin === 'subscription' ? '订阅' : '手动'}</Badge>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={source.enabled}
@@ -381,9 +470,8 @@ export function SettingsPage(): React.JSX.Element {
             </div>
           ) : (
             <div className="px-5 py-6">
-              <div className="border-input bg-muted rounded-xl border border-dashed p-10 text-center">
-                <div className="text-foreground text-sm font-semibold">暂无数据源</div>
-                <p className="text-muted-foreground mt-2 text-sm">添加一个数据源，或导入 JSON 文件。</p>
+              <div className="border-input rounded-xl p-10 text-center">
+                <div className="text-muted-foreground text-sm font-semibold">暂无数据</div>
               </div>
             </div>
           )}
