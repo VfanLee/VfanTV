@@ -49,6 +49,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('sources:update', (_event, id: string, input: Parameters<AppApi['sources']['update']>[1]) =>
     sourceService.update(id, input),
   )
+  ipcMain.handle('sources:reorder', (_event, sourceIds: Parameters<AppApi['sources']['reorder']>[0]) =>
+    sourceService.reorder(sourceIds),
+  )
   ipcMain.handle('sources:delete', (_event, id: string) => sourceService.delete(id))
   ipcMain.handle('sources:preview-import', (_event, payload: Parameters<AppApi['sources']['previewImport']>[0]) =>
     sourceService.previewImport(payload),

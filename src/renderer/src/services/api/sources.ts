@@ -21,6 +21,10 @@ export async function updateSource(id: string, input: VodSourceInput): Promise<V
   return requireRuntimeApi().sources.update(id, input)
 }
 
+export async function reorderSources(sourceIds: string[]): Promise<VodSourceConfig[]> {
+  return requireRuntimeApi().sources.reorder(sourceIds)
+}
+
 export async function deleteSource(id: string): Promise<void> {
   await requireRuntimeApi().sources.delete(id)
 }

@@ -66,6 +66,18 @@ export class VodSourceRepository {
     return this.findById(source.id) ?? source
   }
 
+  reorder(sourceIds: string[]): VodSourceConfig[] {
+    const updatedAt = Date.now()
+
+    this.db.transaction((tx) => {
+      for (const [sort, id] of sourceIds.entries()) {
+        tx.update(vodSourcesTable).set({ sort, updatedAt }).where(eq(vodSourcesTable.id, id)).run()
+      }
+    })
+
+    return this.list()
+  }
+
   delete(id: string): void {
     this.db.delete(vodSourcesTable).where(eq(vodSourcesTable.id, id)).run()
   }

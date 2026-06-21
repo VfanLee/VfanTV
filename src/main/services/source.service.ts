@@ -85,6 +85,22 @@ export class SourceService {
     })
   }
 
+  reorder(sourceIds: string[]): VodSourceConfig[] {
+    const sources = this.repository.list()
+    const existingIds = new Set(sources.map((source) => source.id))
+    const requestedIds = new Set(sourceIds)
+
+    if (
+      sourceIds.length !== sources.length ||
+      requestedIds.size !== sourceIds.length ||
+      sourceIds.some((id) => !existingIds.has(id))
+    ) {
+      throw new Error('播放源排序数据无效')
+    }
+
+    return this.repository.reorder(sourceIds)
+  }
+
   delete(id: string): void {
     const existing = this.repository.findById(id)
 

@@ -7,6 +7,7 @@ const api: AppApi = {
     list: () => ipcRenderer.invoke('sources:list'),
     create: (input) => ipcRenderer.invoke('sources:create', input),
     update: (id, input) => ipcRenderer.invoke('sources:update', id, input),
+    reorder: (sourceIds) => ipcRenderer.invoke('sources:reorder', sourceIds),
     delete: (id) => ipcRenderer.invoke('sources:delete', id),
     previewImport: (payload) => ipcRenderer.invoke('sources:preview-import', payload),
     confirmImport: (payload) => ipcRenderer.invoke('sources:confirm-import', payload),

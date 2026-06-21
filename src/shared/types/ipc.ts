@@ -55,6 +55,7 @@ export interface AppApi {
     list: () => Promise<VodSourceConfig[]>
     create: (input: VodSourceInput) => Promise<VodSourceConfig>
     update: (id: string, input: VodSourceInput) => Promise<VodSourceConfig>
+    reorder: (sourceIds: string[]) => Promise<VodSourceConfig[]>
     delete: (id: string) => Promise<void>
     previewImport: (payload: unknown) => Promise<VodSourceImportPreview>
     confirmImport: (payload: unknown) => Promise<VodSourceImportResult>

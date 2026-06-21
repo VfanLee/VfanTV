@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { Check, Download, GripVertical, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VodSourceConfig, VodSourceInput } from '@shared/types'
 import { Badge, Button, Card, Input, Switch, ThemeSettings } from '@renderer/components'
@@ -10,6 +10,7 @@ import {
   importSourcesFromFile,
   isApiAvailable,
   listSources,
+  reorderSources,
   updateSource,
 } from '@renderer/services/api'
 
@@ -30,6 +31,9 @@ export function SettingsPage(): React.JSX.Element {
   const [sources, setSources] = useState<VodSourceConfig[]>([])
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set())
   const [isBatchUpdating, setIsBatchUpdating] = useState(false)
+  const [draggedSourceId, setDraggedSourceId] = useState<string>()
+  const [dragOverSourceId, setDragOverSourceId] = useState<string>()
+  const [isReordering, setIsReordering] = useState(false)
   const [dialog, setDialog] = useState<SourceDialogState>()
   const apiAvailable = isApiAvailable()
   const enabledCount = sources.filter((source) => source.enabled).length
@@ -195,6 +199,44 @@ export function SettingsPage(): React.JSX.Element {
     }
   }
 
+  const resetDragState = (): void => {
+    setDraggedSourceId(undefined)
+    setDragOverSourceId(undefined)
+  }
+
+  const dropSource = async (targetSourceId: string): Promise<void> => {
+    const activeSourceId = draggedSourceId
+    resetDragState()
+
+    if (!activeSourceId || activeSourceId === targetSourceId) return
+
+    const previousSources = sources
+    const fromIndex = previousSources.findIndex((source) => source.id === activeSourceId)
+    const toIndex = previousSources.findIndex((source) => source.id === targetSourceId)
+
+    if (fromIndex < 0 || toIndex < 0) return
+
+    const nextSources = [...previousSources]
+    const [movedSource] = nextSources.splice(fromIndex, 1)
+
+    if (!movedSource) return
+
+    nextSources.splice(toIndex, 0, movedSource)
+    setSources(nextSources)
+    setIsReordering(true)
+
+    try {
+      applySources(await reorderSources(nextSources.map((source) => source.id)))
+    } catch (error) {
+      setSources(previousSources)
+      toast.error('排序保存失败', {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setIsReordering(false)
+    }
+  }
+
   return (
     <div className="min-h-full px-8 py-8">
       <header className="mb-7 pr-16">
@@ -213,7 +255,7 @@ export function SettingsPage(): React.JSX.Element {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex gap-3">
                 <h2 className="text-foreground text-lg font-semibold">数据源管理</h2>
-                <p className="text-muted-foreground mt-1 text-sm">管理应用的数据源。</p>
+                <p className="text-muted-foreground mt-1 text-sm">管理应用的数据源，拖拽可调整顺序。</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -253,7 +295,8 @@ export function SettingsPage(): React.JSX.Element {
           {sources.length > 0 ? (
             <div className="h-[460px] overflow-auto">
               <div className="min-w-[820px]">
-                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-3 text-xs font-medium">
+                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-3 text-xs font-medium">
+                  <div aria-hidden="true" />
                   <SelectionCheckbox
                     checked={allSelected}
                     label={allSelected ? '取消全选' : '全选播放源'}
@@ -267,8 +310,40 @@ export function SettingsPage(): React.JSX.Element {
                 {sources.map((source) => (
                   <div
                     key={source.id}
-                    className="border-border hover:bg-muted grid grid-cols-[40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-4 last:border-b-0"
+                    className={`border-border grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-4 transition-colors last:border-b-0 ${
+                      draggedSourceId === source.id
+                        ? 'opacity-55'
+                        : dragOverSourceId === source.id
+                          ? 'bg-accent/60'
+                          : 'hover:bg-muted'
+                    }`}
+                    onDragOver={(event) => {
+                      if (!draggedSourceId || draggedSourceId === source.id) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                      setDragOverSourceId(source.id)
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      void dropSource(source.id)
+                    }}
                   >
+                    <button
+                      aria-label={`拖拽调整 ${source.name} 的顺序`}
+                      className="text-muted-foreground hover:text-foreground flex size-7 cursor-grab items-center justify-center rounded-lg active:cursor-grabbing disabled:cursor-default"
+                      disabled={isReordering}
+                      draggable={!isReordering}
+                      title="拖拽调整顺序"
+                      type="button"
+                      onDragEnd={resetDragState}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = 'move'
+                        event.dataTransfer.setData('text/plain', source.id)
+                        setDraggedSourceId(source.id)
+                      }}
+                    >
+                      <GripVertical size={16} />
+                    </button>
                     <SelectionCheckbox
                       checked={selectedSourceIds.has(source.id)}
                       label={`选择 ${source.name}`}

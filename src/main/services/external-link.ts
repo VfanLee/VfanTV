@@ -1,5 +1,4 @@
-import { spawn } from 'child_process'
-import { shell } from 'electron'
+import { BrowserWindow, clipboard, dialog, shell } from 'electron'
 
 export function isAllowedExternalUrl(url: string): boolean {
   try {
@@ -15,26 +14,23 @@ export async function openExternalUrl(url: string): Promise<void> {
     throw new Error('仅支持打开 http 或 https 链接')
   }
 
-  if (process.platform === 'win32') {
-    await openWithWindowsExplorer(url)
+  const options = {
+    type: 'question' as const,
+    title: '访问外部链接',
+    message: '是否访问外部链接？',
+    detail: url,
+    buttons: ['复制链接', '确定'],
+    defaultId: 1,
+    cancelId: 0,
+    noLink: true,
+  }
+  const parent = BrowserWindow.getFocusedWindow()
+  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+
+  if (response === 1) {
+    await shell.openExternal(url)
     return
   }
 
-  await shell.openExternal(url)
-}
-
-function openWithWindowsExplorer(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('explorer.exe', [url], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    })
-
-    child.once('error', reject)
-    child.once('spawn', () => {
-      child.unref()
-      resolve()
-    })
-  })
+  clipboard.writeText(url)
 }

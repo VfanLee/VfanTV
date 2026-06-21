@@ -123,7 +123,7 @@ export function AboutPage(): React.JSX.Element {
         </Card>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <LinkCard href={AUTHOR_URL} icon={CircleUserRound} title="VfanLee" />
+          <LinkCard href={AUTHOR_URL} icon={CircleUserRound} title="关于作者" />
           <LinkCard href={FEEDBACK_URL} icon={MessageCircle} title="意见反馈" />
         </div>
 
@@ -179,8 +179,8 @@ function VersionItem({
 }
 
 function getUpdateHint(result: UpdateCheckResult | undefined, isChecking: boolean): string {
-  if (isChecking) return '正在通过多条线路获取最新版本信息…'
-  if (!result) return '提示：点击「检查更新」获取最新版本（将依次尝试原始线路与国内代理）'
+  if (isChecking) return '正在获取最新版本信息…'
+  if (!result) return '提示：点击「检查更新」获取最新版本'
   if (result.updateAvailable) return `发现新版本 v${result.latestVersion}，可查看更新说明并选择下载线路`
   return '当前已是最新版本'
 }
