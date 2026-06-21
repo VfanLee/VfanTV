@@ -62,6 +62,18 @@
 - 自由使用、研究、修改和分发
 - 修改后的衍生作品须以相同协议开源，并向接收者提供完整源代码
 
+## 常见问题
+
+### macOS 安装运行后显示「文件已损坏」？
+
+1. 在终端执行以下命令移除隔离属性：
+
+   ```bash
+   xattr -rd com.apple.quarantine /Applications/VfanTV.app/
+   ```
+
+2. 重新打开应用。
+
 ## 🙏 致谢
 
 - [LunaTV](https://github.com/MoonTechLab/LunaTV) —— 灵感来源，由此启发
