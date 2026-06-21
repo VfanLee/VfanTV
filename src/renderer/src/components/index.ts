@@ -1,4 +1,5 @@
 export * from './layout/AppLayout'
+export * from './layout/SettingsCard'
 export * from './layout/ThemeProvider'
 export * from './layout/ThemeSettings'
 export * from './media/BasicPlayer'

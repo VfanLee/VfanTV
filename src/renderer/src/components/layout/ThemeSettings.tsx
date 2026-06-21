@@ -1,8 +1,8 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { Card } from '@renderer/components'
 import { cn } from '@renderer/lib/utils'
 import { useThemeStore, type ThemeMode } from '@renderer/stores/theme'
+import { SettingsCard } from './SettingsCard'
 
 const themeItems: Array<{ mode: ThemeMode; label: string; description: string; icon: LucideIcon }> = [
   { mode: 'light', label: '明亮', description: '始终使用浅色界面', icon: Sun },
@@ -15,12 +15,7 @@ export function ThemeSettings(): React.JSX.Element {
   const setMode = useThemeStore((state) => state.setMode)
 
   return (
-    <Card className="overflow-hidden">
-      <div className="border-border border-b px-5 py-5">
-        <h2 className="text-foreground text-lg font-semibold">外观主题</h2>
-        <p className="text-muted-foreground mt-1 text-sm">选择应用的明亮、暗黑或跟随系统主题。</p>
-      </div>
-
+    <SettingsCard description="选择应用的明亮、暗黑或跟随系统主题。" title="外观主题">
       <div className="grid gap-3 p-5 sm:grid-cols-3">
         {themeItems.map((item) => {
           const active = mode === item.mode
@@ -48,6 +43,6 @@ export function ThemeSettings(): React.JSX.Element {
           )
         })}
       </div>
-    </Card>
+    </SettingsCard>
   )
 }

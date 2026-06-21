@@ -67,7 +67,7 @@ export class SourceService {
     const existing = this.repository.findById(id)
 
     if (!existing) {
-      throw new Error('播放源不存在')
+      throw new Error('数据源不存在')
     }
 
     const duplicated = this.repository.findByBaseUrl(data.baseUrl)
@@ -95,7 +95,7 @@ export class SourceService {
       requestedIds.size !== sourceIds.length ||
       sourceIds.some((id) => !existingIds.has(id))
     ) {
-      throw new Error('播放源排序数据无效')
+      throw new Error('数据源排序数据无效')
     }
 
     return this.repository.reorder(sourceIds)
@@ -105,7 +105,7 @@ export class SourceService {
     const existing = this.repository.findById(id)
 
     if (!existing) {
-      throw new Error('播放源不存在')
+      throw new Error('数据源不存在')
     }
 
     this.repository.delete(id)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, Clapperboard, Mic2, Star, Trash2, Tv } from 'lucide-react'
+import { ChevronRight, Star, Trash2 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { RecentPlayItem, RecommendationItem } from '@shared/types'
 import { MediaPoster, PosterCardSkeleton, PosterPlayOverlay } from '@renderer/components'
@@ -8,12 +9,7 @@ import { categorySections, listRecentPlays, removeRecentPlay } from '@renderer/s
 import { recentPlayToVodSearchResult } from '@renderer/services/playback'
 import { useAppDataStore } from '@renderer/stores/app-data'
 import { useSearchContextStore } from '@renderer/stores/search-context'
-
-const categoryIcons: Record<RecommendationItem['category'], typeof Clapperboard> = {
-  movie: Clapperboard,
-  tv: Tv,
-  show: Mic2,
-}
+import { categoryIcons } from '@renderer/lib/category-icons'
 
 export function HomePage(): React.JSX.Element {
   const navigate = useNavigate()
@@ -154,7 +150,7 @@ function SectionHeader({
   title,
   onMore,
 }: {
-  icon?: typeof Clapperboard
+  icon?: LucideIcon
   title: string
   onMore: () => void
 }): React.JSX.Element {

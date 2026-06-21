@@ -22,9 +22,8 @@ export function PlayerErrorLogDialog({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-foreground text-sm font-semibold" id="player-error-log-title">
-              当前播放错误日志
+              错误日志
             </h2>
-            <p className="text-muted-foreground mt-1 text-xs">切换剧集或播放地址后自动清空。</p>
           </div>
           <DialogCloseButton label="关闭错误日志" onClick={onClose} />
         </div>
@@ -46,7 +45,7 @@ export function PlayerErrorLogDialog({
           </div>
         ) : (
           <div className="border-input text-muted-foreground mt-4 flex h-36 items-center justify-center rounded-xl border border-dashed text-sm">
-            当前播放尚未产生错误日志
+            无错误日志
           </div>
         )}
       </div>
@@ -79,7 +78,7 @@ export function PlaySourceDialog({ onClose, src }: { onClose: () => void; src: s
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-foreground text-sm font-semibold" id="play-source-title">
-            播放地址
+            当前播放地址
           </h2>
           <DialogCloseButton label="关闭播放地址" onClick={onClose} />
         </div>

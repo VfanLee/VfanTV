@@ -8,7 +8,7 @@ export const vodSourceImportItemSchema = z.object({
 })
 
 export const vodSourceInputSchema = z.object({
-  name: z.string().trim().min(1, '请输入播放源名称'),
+  name: z.string().trim().min(1, '请输入数据源名称'),
   baseUrl: z.string().trim().url('请输入完整源路径'),
   enabled: z.boolean().default(false),
 })

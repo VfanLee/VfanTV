@@ -142,10 +142,13 @@ export function PlayerPage(): React.JSX.Element {
     [sameTitleCandidates, sourceId, vodId],
   )
   const detailItems = useMemo(() => getVodDetailItems(current), [current])
+  const doubanScore = getDoubanScore(current)
+  const remarks = getVodField(current, 'vod_remarks') ?? current?.remarks
+  const vodStatus = getVodField(current, 'vod_state')
   const subtitle = getVodField(current, 'vod_sub')
   const isCurrentFavorite = Boolean(current) && favoriteResourceKey === resourceKey && isFavorite
   const metaText = current
-    ? [current.year, current.area, current.category, current.remarks].filter(Boolean).join(' · ')
+    ? [current.year, current.area, current.category].filter(Boolean).join(' · ')
     : '刷新或直接进入播放页时，后续会通过 sourceId + vodId 恢复详情。'
 
   const refreshSources = useCallback(
@@ -473,45 +476,47 @@ export function PlayerPage(): React.JSX.Element {
         </main>
 
         {!isTheaterMode ? (
-          <aside className="border-border bg-card flex h-[520px] min-h-0 flex-col rounded-xl border p-4 shadow-sm xl:h-full">
-            <div className="bg-muted grid grid-cols-2 rounded-xl p-1">
-              <PanelTab
-                active={activeTab === 'episodes'}
-                icon={ListVideo}
-                label="选集"
-                onClick={() => setActiveTab('episodes')}
-              />
-              <PanelTab
-                active={activeTab === 'sources'}
-                icon={Radio}
-                label="换源"
-                onClick={() => setActiveTab('sources')}
-              />
-            </div>
+          <div className="relative h-[520px] min-h-0 xl:h-auto">
+            <aside className="border-border bg-card absolute inset-0 flex min-h-0 flex-col rounded-xl border p-4 shadow-sm">
+              <div className="bg-muted grid grid-cols-2 rounded-xl p-1">
+                <PanelTab
+                  active={activeTab === 'episodes'}
+                  icon={ListVideo}
+                  label="选集"
+                  onClick={() => setActiveTab('episodes')}
+                />
+                <PanelTab
+                  active={activeTab === 'sources'}
+                  icon={Radio}
+                  label="换源"
+                  onClick={() => setActiveTab('sources')}
+                />
+              </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {activeTab === 'episodes' ? (
-                <EpisodesPanel
-                  activeLine={activeLine}
-                  activeSelection={activeSelection}
-                  isDescending={isEpisodeDescending}
-                  lines={lines}
-                  onSelectEpisode={selectEpisode}
-                  onToggleOrder={() => setIsEpisodeDescending((current) => !current)}
-                />
-              ) : (
-                <SourcesPanel
-                  isRefreshing={isRefreshingSources}
-                  keyword={keyword}
-                  probeStates={sourceProbeStates}
-                  refreshState={refreshState}
-                  rows={sourceRows}
-                  onRefresh={() => void refreshSources(true)}
-                  onSelect={selectSource}
-                />
-              )}
-            </div>
-          </aside>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeTab === 'episodes' ? (
+                  <EpisodesPanel
+                    activeLine={activeLine}
+                    activeSelection={activeSelection}
+                    isDescending={isEpisodeDescending}
+                    lines={lines}
+                    onSelectEpisode={selectEpisode}
+                    onToggleOrder={() => setIsEpisodeDescending((current) => !current)}
+                  />
+                ) : (
+                  <SourcesPanel
+                    isRefreshing={isRefreshingSources}
+                    keyword={keyword}
+                    probeStates={sourceProbeStates}
+                    refreshState={refreshState}
+                    rows={sourceRows}
+                    onRefresh={() => void refreshSources(true)}
+                    onSelect={selectSource}
+                  />
+                )}
+              </div>
+            </aside>
+          </div>
         ) : null}
       </div>
 
@@ -521,15 +526,34 @@ export function PlayerPage(): React.JSX.Element {
             baseUrl={current?.sourceBaseUrl}
             className="float-left mr-6 mb-4 aspect-[2/3] w-[clamp(11rem,18vw,14rem)]"
             headers={current?.sourceHeaders}
+            overlay={
+              doubanScore ? (
+                <span className="absolute top-2 right-2 rounded-lg bg-black/75 px-2 py-1 text-xs font-semibold text-amber-300 shadow-sm backdrop-blur">
+                  豆瓣 {doubanScore}
+                </span>
+              ) : undefined
+            }
             poster={current?.poster}
             title={current?.title ?? '影片海报'}
           />
 
           <div className="border-border flex min-w-0 flex-wrap items-start justify-between gap-4 border-b pb-5">
             <div className="min-w-0 flex-1">
-              <h1 className="max-w-full truncate text-3xl font-semibold tracking-tight">
-                {current?.title ?? '资源上下文待恢复'}
-              </h1>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h1 className="max-w-full truncate text-3xl font-semibold tracking-tight">
+                  {current?.title ?? '资源上下文待恢复'}
+                </h1>
+                {vodStatus ? (
+                  <span className="shrink-0 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    {vodStatus}
+                  </span>
+                ) : null}
+                {remarks ? (
+                  <span className="border-primary/25 bg-primary/10 text-primary shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold">
+                    {remarks}
+                  </span>
+                ) : null}
+              </div>
               {subtitle ? <p className="text-muted-foreground mt-2 text-sm font-medium">{subtitle}</p> : null}
               <p className="text-muted-foreground mt-2 text-sm font-medium">{metaText}</p>
             </div>
@@ -545,7 +569,7 @@ export function PlayerPage(): React.JSX.Element {
               onClick={() => void toggleFavorite()}
             >
               <Heart fill={isCurrentFavorite ? 'currentColor' : 'none'} size={17} />
-              {isCurrentFavorite ? '已收藏' : '加入收藏'}
+              {isCurrentFavorite ? '已收藏' : '收藏'}
             </button>
           </div>
 
@@ -692,7 +716,7 @@ function SourcesPanel({
           onClick={onRefresh}
         >
           {isRefreshing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-          {isRefreshing ? '刷新中' : '刷新视频源'}
+          {isRefreshing ? '刷新中...' : '刷新'}
         </button>
       </div>
 
@@ -935,24 +959,17 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, task: (ite
 }
 
 function getVodDetailItems(item: VodSearchResult | undefined): Array<{ label: string; value: string }> {
-  const score = getDoubanScore(item)
   const details: Array<{ label: string; value: string }> = []
-
-  if (score) {
-    details.push({ label: '豆瓣评分', value: score })
-  }
 
   const fields: Array<[string, string[]]> = [
     ['类型', ['vod_class']],
     ['演员', ['vod_actor']],
     ['导演', ['vod_director']],
     ['编剧', ['vod_writer']],
-    ['备注', ['vod_remarks']],
     ['上映日期', ['vod_pubdate']],
     ['地区', ['vod_area']],
     ['语言', ['vod_lang']],
     ['年份', ['vod_year', 'vod_yea']],
-    ['状态', ['vod_state']],
   ]
 
   fields.forEach(([label, keys]) => {

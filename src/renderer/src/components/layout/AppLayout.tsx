@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useMatches, useNavigate, useSearchParams } from 'react-router'
-import { ChevronsLeft, ChevronsRight, Clock3, Film, Heart, Home, Info, Mic2, Search, Settings, Tv } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, Clock3, Heart, Home, Info, Search, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
+import { categoryIcons } from '@renderer/lib/category-icons'
 import logoMarkUrl from '@renderer/assets/logo-mark.svg'
 
 const primaryNavItems: Array<{ to: string; label: string; icon: LucideIcon }> = [
   { to: '/', label: '首页', icon: Home },
-  { to: '/hot/movie', label: '电影', icon: Film },
-  { to: '/hot/tv', label: '剧集', icon: Tv },
-  { to: '/hot/show', label: '综艺', icon: Mic2 },
+  { to: '/hot/movie', label: '电影', icon: categoryIcons.movie },
+  { to: '/hot/tv', label: '剧集', icon: categoryIcons.tv },
+  { to: '/hot/show', label: '综艺', icon: categoryIcons.show },
   { to: '/recent', label: '最近播放', icon: Clock3 },
   { to: '/favorites', label: '我的收藏', icon: Heart },
 ]
@@ -22,6 +23,7 @@ interface LayoutRouteHandle {
 export function AppLayout(): React.JSX.Element {
   const matches = useMatches()
   const location = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const toggleSidebar = (): void => setIsSidebarCollapsed((current) => !current)
   const showGlobalSearch = matches.some((match) => {
@@ -32,6 +34,14 @@ export function AppLayout(): React.JSX.Element {
     const handle = match.handle as LayoutRouteHandle | undefined
     return handle?.hideTopBar === true
   })
+
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    if (main) {
+      main.scrollTop = 0
+      main.scrollLeft = 0
+    }
+  }, [location.key])
 
   return (
     <div
@@ -82,7 +92,7 @@ export function AppLayout(): React.JSX.Element {
         </nav>
       </aside>
 
-      <main className="relative h-screen min-w-0 overflow-y-auto">
+      <main ref={mainRef} className="relative h-screen min-w-0 overflow-y-auto">
         {hideTopBar ? null : <TopBar searchKey={location.search} showSearch={showGlobalSearch} />}
         <Outlet />
       </main>
@@ -135,15 +145,15 @@ function Logo({ collapsed }: { collapsed: boolean }): React.JSX.Element {
     <NavLink
       aria-label="返回首页"
       className={cn(
-        'focus-visible:ring-ring flex min-w-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2',
+        'focus-visible:ring-ring flex min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2',
         collapsed && 'justify-center',
       )}
       title="返回首页"
       to="/"
     >
-      <img alt="VfanTV" className="size-12 shrink-0" draggable={false} src={logoMarkUrl} />
+      <img alt="VfanTV" className="size-14 shrink-0" draggable={false} src={logoMarkUrl} />
       <div className={cn('min-w-0 transition-opacity duration-150', collapsed && 'hidden')}>
-        <div className="text-sidebar-primary text-lg font-semibold tracking-wide">VfanTV</div>
+        <div className="text-sidebar-primary text-xl font-semibold tracking-wide">VfanTV</div>
         <div className="text-sidebar-foreground text-sm">影视聚合平台</div>
       </div>
     </NavLink>
@@ -164,7 +174,7 @@ function SidebarLink({
       to={item.to}
       className={({ isActive }) =>
         cn(
-          'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex h-11 items-center rounded-xl text-sm font-medium transition-colors',
+          'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex h-11 items-center rounded-xl font-medium transition-colors',
           collapsed ? 'justify-center px-0' : 'gap-3 px-3',
           isActive && 'bg-sidebar-accent text-sidebar-primary',
         )

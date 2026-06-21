@@ -5,13 +5,14 @@ import { MediaPoster, PosterCardSkeleton } from '@renderer/components'
 import { categorySections, getHotCacheKey, getHotCategorySection } from '@renderer/services/api'
 import { cn } from '@renderer/lib/utils'
 import { useAppDataStore } from '@renderer/stores/app-data'
-import { Flame } from 'lucide-react'
+import { categoryIcons } from '@renderer/lib/category-icons'
 
 export function HotPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { category } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeSection = getHotCategorySection(category)
+  const CategoryIcon = categoryIcons[activeSection.key]
   const activeType = readType(activeSection, searchParams.get('type'))
   const cacheKey = getHotCacheKey(activeSection.key, activeType)
   const categoryCache = useAppDataStore((state) => state.hot[cacheKey])
@@ -70,12 +71,9 @@ export function HotPage(): React.JSX.Element {
         <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Flame className="text-primary" size={22} />
+              <CategoryIcon className="text-primary" size={22} />
               <h1 className="text-2xl font-semibold tracking-tight">热门{activeSection.title}</h1>
             </div>
-            <p className="text-muted-foreground mt-2 text-sm">
-              选择类型浏览豆瓣热门{activeSection.title}，滚动到底部自动加载更多。
-            </p>
           </div>
           <div className="border-border bg-card flex flex-wrap rounded-xl border p-1">
             {activeSection.filters.map((filter) => (

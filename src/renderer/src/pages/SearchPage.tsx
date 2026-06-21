@@ -472,7 +472,7 @@ function SearchEmptyState(): React.JSX.Element {
         <Search className="text-muted-foreground mx-auto" size={30} />
         <div className="text-foreground mt-3 text-sm font-semibold">聚合搜索</div>
         <p className="text-muted-foreground mt-1 text-sm">
-          搜索后可以按影片分组查看，也可以切到单个视频源确认返回状态。
+          搜索后可以按影片分组查看，也可以切到单个数据源确认返回状态。
         </p>
       </div>
     </div>
@@ -489,7 +489,7 @@ function ResultPlaceholder({ isSearching }: { isSearching: boolean }): React.JSX
           <AlertCircle className="text-muted-foreground mx-auto" size={30} />
         )}
         <div className="text-foreground mt-3 text-sm font-semibold">
-          {isSearching ? '正在等待视频源返回' : '还没有可展示的结果'}
+          {isSearching ? '正在等待数据源返回' : '还没有可展示的结果'}
         </div>
         <p className="text-muted-foreground mt-1 text-sm">
           {isSearching ? '多个源会增量出现，先搜到的内容会先展示。' : '换个关键词再试一次。'}

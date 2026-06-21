@@ -73,7 +73,7 @@ export function AboutPage(): React.JSX.Element {
             <ExternalLink href={REPOSITORY_URL} label="GitHub" />
           </div>
           <p className="border-primary/30 bg-primary/5 text-muted-foreground mt-5 border-l-2 px-3 py-2 text-xs leading-5">
-            本应用为空壳播放器，不内置播放源或直播源，请自行收集并配置。
+            本应用为空壳播放器，不内置数据源或直播源，请自行收集并配置。
           </p>
         </Card>
 

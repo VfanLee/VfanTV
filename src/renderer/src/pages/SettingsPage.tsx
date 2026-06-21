@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, Download, GripVertical, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VodSourceConfig, VodSourceInput } from '@shared/types'
-import { Badge, Button, Card, Input, Switch, ThemeSettings } from '@renderer/components'
+import { Badge, Button, Input, SettingsCard, Switch, ThemeSettings } from '@renderer/components'
 import {
   createSource,
   deleteSource,
@@ -66,7 +66,7 @@ export function SettingsPage(): React.JSX.Element {
   const importSources = async (): Promise<void> => {
     if (!apiAvailable) {
       toast.error('当前环境不可用', {
-        description: '请在桌面应用中管理播放源。',
+        description: '请在桌面应用中管理数据源。',
       })
       return
     }
@@ -92,7 +92,7 @@ export function SettingsPage(): React.JSX.Element {
   const exportSources = async (): Promise<void> => {
     if (!apiAvailable) {
       toast.error('当前环境不可用', {
-        description: '请在桌面应用中导出播放源。',
+        description: '请在桌面应用中导出数据源。',
       })
       return
     }
@@ -105,7 +105,7 @@ export function SettingsPage(): React.JSX.Element {
       }
 
       toast.success('导出完成', {
-        description: `已导出 ${result.count} 个播放源`,
+        description: `已导出 ${result.count} 个数据源`,
       })
     } catch (error) {
       toast.error('导出失败', {
@@ -117,18 +117,18 @@ export function SettingsPage(): React.JSX.Element {
   const deleteSourceItem = async (source: VodSourceConfig): Promise<void> => {
     if (!apiAvailable) {
       toast.error('当前环境不可用', {
-        description: '请在桌面应用中删除播放源。',
+        description: '请在桌面应用中删除数据源。',
       })
       return
     }
 
-    if (!window.confirm(`确定删除播放源「${source.name}」吗？`)) {
+    if (!window.confirm(`确定删除数据源「${source.name}」吗？`)) {
       return
     }
 
     try {
       await deleteSource(source.id)
-      toast.success('已删除播放源')
+      toast.success('已删除数据源')
       await refreshSources()
     } catch (error) {
       toast.error('删除失败', {
@@ -140,7 +140,7 @@ export function SettingsPage(): React.JSX.Element {
   const toggleSource = async (source: VodSourceConfig, enabled: boolean): Promise<void> => {
     if (!apiAvailable) {
       toast.error('当前环境不可用', {
-        description: '请在桌面应用中调整播放源状态。',
+        description: '请在桌面应用中调整数据源状态。',
       })
       return
     }
@@ -193,9 +193,9 @@ export function SettingsPage(): React.JSX.Element {
     setIsBatchUpdating(false)
 
     if (failedCount > 0) {
-      toast.error('部分状态更新失败', { description: `${failedCount} 个播放源未能更新，请稍后重试。` })
+      toast.error('部分状态更新失败', { description: `${failedCount} 个数据源未能更新，请稍后重试。` })
     } else {
-      toast.success(`已${enabled ? '开启' : '关闭'} ${selectedSources.length} 个播放源`)
+      toast.success(`已${enabled ? '开启' : '关闭'} ${selectedSources.length} 个数据源`)
     }
   }
 
@@ -250,60 +250,57 @@ export function SettingsPage(): React.JSX.Element {
       <div className="grid gap-5">
         <ThemeSettings />
 
-        <Card className="overflow-hidden">
-          <div className="border-border border-b px-5 py-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex gap-3">
-                <h2 className="text-foreground text-lg font-semibold">数据源管理</h2>
-                <p className="text-muted-foreground mt-1 text-sm">管理应用的数据源，拖拽可调整顺序。</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Badge>{sources.length} 个源</Badge>
-                <Badge className="border-primary bg-accent text-primary">{enabledCount} 个启用</Badge>
-              </div>
+        <SettingsCard
+          description="管理应用的数据源，拖拽可调整顺序。"
+          headerActions={
+            <div className="flex flex-wrap gap-2">
+              <Badge>{sources.length} 个源</Badge>
+              <Badge className="border-primary bg-accent text-primary">{enabledCount} 个启用</Badge>
             </div>
+          }
+          title="数据源管理"
+        >
+          <div className="border-border flex flex-wrap gap-2 border-b px-5 py-5">
+            <Button
+              disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
+              onClick={() => void batchToggleSources(true)}
+            >
+              一键开启{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
+            </Button>
+            <Button
+              disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
+              onClick={() => void batchToggleSources(false)}
+            >
+              一键关闭{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
+            </Button>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button disabled={!apiAvailable} variant="primary" onClick={() => setDialog({ mode: 'create' })}>
-                <Plus size={16} />
-                添加播放源
-              </Button>
-              <Button disabled={!apiAvailable} onClick={importSources}>
-                <Upload size={16} />
-                批量导入
-              </Button>
-              <Button disabled={!apiAvailable} onClick={exportSources}>
-                <Download size={16} />
-                批量导出
-              </Button>
-              <Button
-                disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
-                onClick={() => void batchToggleSources(true)}
-              >
-                一键开启{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
-              </Button>
-              <Button
-                disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
-                onClick={() => void batchToggleSources(false)}
-              >
-                一键关闭{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
-              </Button>
-            </div>
+            <div className="ml-auto" />
+            <Button disabled={!apiAvailable} onClick={importSources}>
+              <Upload size={16} />
+              批量导入
+            </Button>
+            <Button disabled={!apiAvailable} onClick={exportSources}>
+              <Download size={16} />
+              批量导出
+            </Button>
+            <Button disabled={!apiAvailable} variant="primary" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus size={16} />
+              添加数据源
+            </Button>
           </div>
 
           {sources.length > 0 ? (
             <div className="h-[460px] overflow-auto">
               <div className="min-w-[820px]">
-                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-3 text-xs font-medium">
+                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[32px_40px_1.1fr_2fr_112px_132px] items-center border-b px-5 py-3 font-medium">
                   <div aria-hidden="true" />
                   <SelectionCheckbox
                     checked={allSelected}
-                    label={allSelected ? '取消全选' : '全选播放源'}
+                    label={allSelected ? '取消全选' : '全选数据源'}
                     onChange={toggleAllSources}
                   />
-                  <div>播放源名称</div>
-                  <div>源路径</div>
+                  <div>名称</div>
+                  <div>URL</div>
                   <div>状态</div>
                   <div className="text-right">操作</div>
                 </div>
@@ -385,12 +382,12 @@ export function SettingsPage(): React.JSX.Element {
           ) : (
             <div className="px-5 py-6">
               <div className="border-input bg-muted rounded-xl border border-dashed p-10 text-center">
-                <div className="text-foreground text-sm font-semibold">暂无播放源</div>
-                <p className="text-muted-foreground mt-2 text-sm">添加一个播放源，或导入 JSON 文件。</p>
+                <div className="text-foreground text-sm font-semibold">暂无数据源</div>
+                <p className="text-muted-foreground mt-2 text-sm">添加一个数据源，或导入 JSON 文件。</p>
               </div>
             </div>
           )}
-        </Card>
+        </SettingsCard>
       </div>
 
       {dialog ? (
@@ -449,12 +446,12 @@ function SourceDialog({
       : emptySourceInput,
   )
   const [isSaving, setIsSaving] = useState(false)
-  const title = dialog.mode === 'create' ? '添加播放源' : '编辑播放源'
+  const title = dialog.mode === 'create' ? '添加数据源' : '编辑数据源'
 
   const save = async (): Promise<void> => {
     if (!isApiAvailable()) {
       toast.error('当前环境不可用', {
-        description: '请在桌面应用中保存播放源。',
+        description: '请在桌面应用中保存数据源。',
       })
       return
     }
@@ -468,7 +465,7 @@ function SourceDialog({
         await updateSource(dialog.source.id, form)
       }
 
-      toast.success(dialog.mode === 'create' ? '播放源已添加' : '播放源已更新')
+      toast.success(dialog.mode === 'create' ? '数据源已添加' : '数据源已更新')
       await onSaved()
     } catch (error) {
       toast.error('保存失败', {
@@ -488,7 +485,7 @@ function SourceDialog({
 
         <div className="space-y-4">
           <label className="block">
-            <span className="text-foreground text-sm font-medium">播放源名称</span>
+            <span className="text-foreground text-sm font-medium">数据源名称</span>
             <Input
               className="mt-2"
               value={form.name}

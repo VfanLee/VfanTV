@@ -66,7 +66,7 @@ export function registerIpcHandlers(): void {
     }
 
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: '导入播放源 JSON',
+      title: '导入数据源 JSON',
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }],
     })
@@ -92,7 +92,7 @@ export function registerIpcHandlers(): void {
 
     const items = sourceService.exportItems()
     const result = await dialog.showSaveDialog(mainWindow, {
-      title: '导出播放源 JSON',
+      title: '导出数据源 JSON',
       defaultPath: DEFAULT_SOURCES_EXPORT_NAME,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     })
