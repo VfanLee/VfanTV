@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Copy, X } from 'lucide-react'
-import { Button } from '@renderer/components/ui/Button'
+import { Button } from '@renderer/components/ui/button'
 import type { PlayerErrorLog } from './types'
 
 export function PlayerErrorLogDialog({
@@ -88,7 +88,7 @@ export function PlaySourceDialog({ onClose, src }: { onClose: () => void; src: s
         </p>
 
         <div className="mt-3 flex justify-end">
-          <Button className="h-8 px-3 text-xs" type="button" variant="primary" onClick={() => void copyUrl()}>
+          <Button className="h-8 px-3 text-xs" type="button" onClick={() => void copyUrl()}>
             {copyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
             {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制'}
           </Button>

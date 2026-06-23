@@ -7,3 +7,5 @@ out
 
 tsconfig.web.tsbuildinfo
 tsconfig.node.tsbuildinfo
+
+AGENTS.md

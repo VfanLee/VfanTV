@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Card } from '@renderer/components/ui'
+import { Card } from '@renderer/components/ui/card'
 
 interface SettingsCardProps {
   children: ReactNode

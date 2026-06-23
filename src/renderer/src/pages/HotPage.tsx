@@ -92,7 +92,7 @@ export function HotPage(): React.JSX.Element {
           </div>
         </header>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,194px))] items-start gap-x-6 gap-y-9">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-6 gap-y-9">
           {categoryCache.items.map((item) => (
             <HotCard
               key={`${item.category}-${item.id}`}

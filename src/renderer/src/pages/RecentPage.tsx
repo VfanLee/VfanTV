@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { Clock3, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { RecentPlayItem } from '@shared/types'
-import { MediaPoster, PosterPlayOverlay } from '@renderer/components'
+import { ConfirmDialog, MediaPoster, PosterPlayOverlay } from '@renderer/components'
 import { listRecentPlays, removeRecentPlay } from '@renderer/services/api'
 import { recentPlayToVodSearchResult } from '@renderer/services/playback'
 import { useSearchContextStore } from '@renderer/stores/search-context'
@@ -13,6 +13,7 @@ export function RecentPage(): React.JSX.Element {
   const setContext = useSearchContextStore((state) => state.setContext)
   const [recentPlays, setRecentPlays] = useState<RecentPlayItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<RecentPlayItem>()
 
   useEffect(() => {
     let active = true
@@ -35,10 +36,6 @@ export function RecentPage(): React.JSX.Element {
   }, [])
 
   const handleDelete = async (item: RecentPlayItem): Promise<void> => {
-    if (!window.confirm(`确定删除「${item.title}」的播放记录吗？`)) {
-      return
-    }
-
     try {
       await removeRecentPlay(item.title)
       setRecentPlays((current) => current.filter((recentItem) => recentItem.title !== item.title))
@@ -61,7 +58,7 @@ export function RecentPage(): React.JSX.Element {
         </header>
 
         {recentPlays.length > 0 ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,194px))] items-start gap-x-6 gap-y-9">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-6 gap-y-9">
             {recentPlays.map((item) => (
               <RecentCard
                 key={item.id}
@@ -75,7 +72,7 @@ export function RecentPage(): React.JSX.Element {
                     },
                   })
                 }}
-                onDelete={() => void handleDelete(item)}
+                onDelete={() => setPendingDeleteItem(item)}
               />
             ))}
           </div>
@@ -90,6 +87,18 @@ export function RecentPage(): React.JSX.Element {
           </div>
         )}
       </div>
+      {pendingDeleteItem ? (
+        <ConfirmDialog
+          confirmText="删除"
+          description={`确定删除「${pendingDeleteItem.title}」的播放记录吗？`}
+          title="删除播放记录"
+          onCancel={() => setPendingDeleteItem(undefined)}
+          onConfirm={async () => {
+            await handleDelete(pendingDeleteItem)
+            setPendingDeleteItem(undefined)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -125,10 +134,14 @@ function RecentCard({
         </div>
       </button>
       <button
-        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 z-20 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
         type="button"
         title="删除播放记录"
-        onClick={onDelete}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onDelete()
+        }}
       >
         <Trash2 size={15} />
       </button>

@@ -45,7 +45,9 @@ export function MediaPoster({
       {imageSrc && showHoverScrim ? (
         <div className="pointer-events-none absolute inset-0 bg-black opacity-0 transition-opacity duration-300 group-focus-within:opacity-20 group-hover:opacity-20 motion-reduce:transition-none" />
       ) : null}
-      {overlay ? <div className="absolute inset-0 z-10 flex items-center justify-center">{overlay}</div> : null}
+      {overlay ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">{overlay}</div>
+      ) : null}
     </div>
   )
 }

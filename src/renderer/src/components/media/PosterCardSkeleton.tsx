@@ -1,4 +1,4 @@
-import { Skeleton } from '@renderer/components/ui/Skeleton'
+import { Skeleton } from '@renderer/components/ui/skeleton'
 
 export function PosterCardSkeleton(): React.JSX.Element {
   return (

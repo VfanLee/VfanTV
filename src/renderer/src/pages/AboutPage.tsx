@@ -4,7 +4,9 @@ import type { LucideIcon } from 'lucide-react'
 import { FaGithub } from 'react-icons/fa'
 import { toast } from 'sonner'
 import type { UpdateCheckResult } from '@shared/types'
-import { Badge, Button, Card } from '@renderer/components'
+import { Badge } from '@renderer/components/ui/badge'
+import { Button } from '@renderer/components/ui/button'
+import { Card } from '@renderer/components/ui/card'
 import logoMarkUrl from '@renderer/assets/logo-mark.svg'
 import { checkForUpdates, getCurrentVersion, isApiAvailable } from '@renderer/services/api'
 import { RELEASE_ROUTE_PREFIXES } from '@shared/constants/release-routes'
@@ -89,6 +91,7 @@ export function AboutPage(): React.JSX.Element {
             <Button
               className="w-full sm:w-auto"
               disabled={!apiAvailable || isChecking}
+              variant="outline"
               onClick={() => void handleCheckUpdates()}
             >
               {isChecking ? '正在检查' : '检查更新'}

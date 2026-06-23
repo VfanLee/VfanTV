@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { Heart, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { FavoriteItem } from '@shared/types'
-import { MediaPoster, PosterPlayOverlay } from '@renderer/components'
+import { ConfirmDialog, MediaPoster, PosterPlayOverlay } from '@renderer/components'
 import { listFavorites, removeFavorite } from '@renderer/services/api'
 import { favoriteToVodSearchResult } from '@renderer/services/playback'
 import { useSearchContextStore } from '@renderer/stores/search-context'
@@ -13,6 +13,7 @@ export function FavoritesPage(): React.JSX.Element {
   const setContext = useSearchContextStore((state) => state.setContext)
   const [items, setItems] = useState<FavoriteItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<FavoriteItem>()
 
   useEffect(() => {
     let active = true
@@ -34,10 +35,6 @@ export function FavoritesPage(): React.JSX.Element {
   }, [])
 
   const handleDelete = async (item: FavoriteItem): Promise<void> => {
-    if (!window.confirm(`确定删除收藏「${item.title}」吗？`)) {
-      return
-    }
-
     try {
       await removeFavorite(item.sourceId, item.vodId)
       setItems((currentItems) => currentItems.filter((currentItem) => currentItem.id !== item.id))
@@ -60,7 +57,7 @@ export function FavoritesPage(): React.JSX.Element {
         </header>
 
         {items.length > 0 ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,194px))] items-start gap-x-6 gap-y-9">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-6 gap-y-9">
             {items.map((item) => (
               <FavoriteCard
                 key={item.id}
@@ -69,7 +66,7 @@ export function FavoritesPage(): React.JSX.Element {
                   setContext(item.title, [favoriteToVodSearchResult(item)])
                   navigate(`/player/${item.sourceId}/${item.vodId}`)
                 }}
-                onDelete={() => void handleDelete(item)}
+                onDelete={() => setPendingDeleteItem(item)}
               />
             ))}
           </div>
@@ -84,6 +81,18 @@ export function FavoritesPage(): React.JSX.Element {
           </div>
         )}
       </div>
+      {pendingDeleteItem ? (
+        <ConfirmDialog
+          confirmText="删除"
+          description={`确定删除收藏「${pendingDeleteItem.title}」吗？`}
+          title="删除收藏"
+          onCancel={() => setPendingDeleteItem(undefined)}
+          onConfirm={async () => {
+            await handleDelete(pendingDeleteItem)
+            setPendingDeleteItem(undefined)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -117,10 +126,14 @@ function FavoriteCard({
         </p>
       </button>
       <button
-        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 z-20 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
         type="button"
         title="删除收藏"
-        onClick={onDelete}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onDelete()
+        }}
       >
         <Trash2 size={15} />
       </button>

@@ -4,7 +4,7 @@ import { ChevronRight, Star, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { RecentPlayItem, RecommendationItem } from '@shared/types'
-import { MediaPoster, PosterCardSkeleton, PosterPlayOverlay } from '@renderer/components'
+import { ConfirmDialog, MediaPoster, PosterCardSkeleton, PosterPlayOverlay } from '@renderer/components'
 import { categorySections, listRecentPlays, removeRecentPlay } from '@renderer/services/api'
 import { recentPlayToVodSearchResult } from '@renderer/services/playback'
 import { useAppDataStore } from '@renderer/stores/app-data'
@@ -19,6 +19,7 @@ export function HomePage(): React.JSX.Element {
   const loadHome = useAppDataStore((state) => state.loadHome)
   const [recentPlays, setRecentPlays] = useState<RecentPlayItem[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
+  const [pendingDeleteRecent, setPendingDeleteRecent] = useState<RecentPlayItem>()
 
   useEffect(() => {
     void loadHome()
@@ -51,10 +52,6 @@ export function HomePage(): React.JSX.Element {
   }, [homeData.recommendations])
 
   const handleDeleteRecent = async (item: RecentPlayItem): Promise<void> => {
-    if (!window.confirm(`确定删除「${item.title}」的播放记录吗？`)) {
-      return
-    }
-
     try {
       await removeRecentPlay(item.title)
       setRecentPlays((current) => current.filter((recent) => recent.title !== item.title))
@@ -74,7 +71,7 @@ export function HomePage(): React.JSX.Element {
           {recentLoading ? (
             <HomeShelfSkeleton />
           ) : recentPlays.length > 0 ? (
-            <div className="no-scrollbar grid auto-cols-[minmax(180px,194px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
+            <div className="no-scrollbar grid auto-cols-[clamp(180px,16vw,210px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
               {recentPlays.map((item) => (
                 <RecentPlayCard
                   key={item.id}
@@ -88,7 +85,7 @@ export function HomePage(): React.JSX.Element {
                       },
                     })
                   }}
-                  onDelete={() => void handleDeleteRecent(item)}
+                  onDelete={() => setPendingDeleteRecent(item)}
                 />
               ))}
             </div>
@@ -111,7 +108,7 @@ export function HomePage(): React.JSX.Element {
                 {isLoading ? (
                   <HomeShelfSkeleton />
                 ) : items.length > 0 ? (
-                  <div className="no-scrollbar grid auto-cols-[minmax(180px,194px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
+                  <div className="no-scrollbar grid auto-cols-[clamp(180px,16vw,210px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
                     {items.map((item) => (
                       <RecommendationCard
                         key={`${item.category}-${item.id}`}
@@ -131,6 +128,18 @@ export function HomePage(): React.JSX.Element {
           })}
         </div>
       </div>
+      {pendingDeleteRecent ? (
+        <ConfirmDialog
+          confirmText="删除"
+          description={`确定删除「${pendingDeleteRecent.title}」的播放记录吗？`}
+          title="删除播放记录"
+          onCancel={() => setPendingDeleteRecent(undefined)}
+          onConfirm={async () => {
+            await handleDeleteRecent(pendingDeleteRecent)
+            setPendingDeleteRecent(undefined)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -206,10 +215,14 @@ function RecentPlayCard({
         </div>
       </button>
       <button
-        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-destructive hover:bg-destructive/90 focus-visible:ring-ring absolute top-2 right-2 z-20 flex size-8 items-center justify-center rounded-full text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
         type="button"
         title="删除播放记录"
-        onClick={onDelete}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onDelete()
+        }}
       >
         <Trash2 size={15} />
       </button>

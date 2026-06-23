@@ -407,7 +407,7 @@ function SourceResults({
           </div>
 
           {source.items.length > 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {source.items.map((item) => (
                 <SourceResultButton key={`${item.sourceId}-${item.vodId}`} item={item} onClick={() => onOpen(item)} />
               ))}

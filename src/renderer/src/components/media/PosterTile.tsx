@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge } from '@renderer/components/ui'
+import { Badge } from '@renderer/components/ui/badge'
 import { resolveImageUrl } from '@shared/utils/media-image'
 
 interface PosterTileProps {
@@ -15,7 +15,7 @@ export function PosterTile({ baseUrl, title, subtitle, poster, meta }: PosterTil
   const imageSrc = poster && poster !== failedPoster ? resolveImageUrl(poster, { baseUrl }) : undefined
 
   return (
-    <article className="w-36 shrink-0">
+    <article className="min-w-0">
       <div className="border-border bg-muted aspect-[2/3] overflow-hidden rounded-xl border">
         {imageSrc ? (
           <img

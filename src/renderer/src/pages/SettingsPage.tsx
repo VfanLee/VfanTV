@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { Check, Download, GripVertical, Pencil, Plus, RefreshCw, Rss, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VodSourceConfig, VodSourceInput } from '@shared/types'
-import { Badge, Button, Input, SettingsCard, Switch, ThemeSettings } from '@renderer/components'
+import { ConfirmDialog, SettingsCard, ThemeSettings } from '@renderer/components'
+import { Badge } from '@renderer/components/ui/badge'
+import { Button } from '@renderer/components/ui/button'
+import { Input } from '@renderer/components/ui/input'
+import { Switch } from '@renderer/components/ui/switch'
 import {
   clearSources,
   createSource,
@@ -25,6 +29,8 @@ interface SourceDialogState {
   source?: VodSourceConfig
 }
 
+type ConfirmState = { type: 'clearSources' } | { type: 'deleteSource'; source: VodSourceConfig }
+
 const emptySourceInput: VodSourceInput = {
   name: '',
   baseUrl: '',
@@ -42,6 +48,7 @@ export function SettingsPage(): React.JSX.Element {
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
   const [isSyncingSubscription, setIsSyncingSubscription] = useState(false)
   const [dialog, setDialog] = useState<SourceDialogState>()
+  const [confirmState, setConfirmState] = useState<ConfirmState>()
   const apiAvailable = isApiAvailable()
   const enabledCount = sources.filter((source) => source.enabled).length
   const allSelected = sources.length > 0 && selectedSourceIds.size === sources.length
@@ -146,10 +153,6 @@ export function SettingsPage(): React.JSX.Element {
   const clearAllSources = async (): Promise<void> => {
     if (!apiAvailable || sources.length === 0) return
 
-    if (!window.confirm(`确定清空全部 ${sources.length} 个数据源吗？此操作不可恢复。`)) {
-      return
-    }
-
     setIsClearingSources(true)
     try {
       await clearSources()
@@ -169,10 +172,6 @@ export function SettingsPage(): React.JSX.Element {
       toast.error('当前环境不可用', {
         description: '请在桌面应用中删除数据源。',
       })
-      return
-    }
-
-    if (!window.confirm(`确定删除数据源「${source.name}」吗？`)) {
       return
     }
 
@@ -318,7 +317,6 @@ export function SettingsPage(): React.JSX.Element {
             <Button
               className="sm:min-w-24"
               disabled={!apiAvailable || !subscriptionUrl.trim() || isSyncingSubscription}
-              variant="primary"
               onClick={() => void syncSubscription()}
             >
               {isSyncingSubscription ? <RefreshCw className="animate-spin" size={16} /> : <Rss size={16} />}
@@ -340,34 +338,36 @@ export function SettingsPage(): React.JSX.Element {
           <div className="border-border flex flex-wrap gap-2 border-b px-5 py-5">
             <Button
               disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
+              variant="outline"
               onClick={() => void batchToggleSources(true)}
             >
               批量开启{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
             </Button>
             <Button
               disabled={!apiAvailable || selectedSourceIds.size === 0 || isBatchUpdating}
+              variant="outline"
               onClick={() => void batchToggleSources(false)}
             >
               批量关闭{selectedSourceIds.size > 0 ? ` (${selectedSourceIds.size})` : ''}
             </Button>
 
             <div className="ml-auto" />
-            <Button disabled={!apiAvailable} onClick={importSources}>
+            <Button disabled={!apiAvailable} variant="outline" onClick={importSources}>
               <Upload size={16} />
               批量导入
             </Button>
-            <Button disabled={!apiAvailable} onClick={exportSources}>
+            <Button disabled={!apiAvailable} variant="outline" onClick={exportSources}>
               <Download size={16} />
               批量导出
             </Button>
-            <Button disabled={!apiAvailable} variant="primary" onClick={() => setDialog({ mode: 'create' })}>
+            <Button disabled={!apiAvailable} onClick={() => setDialog({ mode: 'create' })}>
               <Plus size={16} />
               添加数据源
             </Button>
             <Button
               disabled={!apiAvailable || sources.length === 0 || isClearingSources}
-              variant="danger"
-              onClick={() => void clearAllSources()}
+              variant="destructive"
+              onClick={() => setConfirmState({ type: 'clearSources' })}
             >
               <Trash2 size={16} />
               {isClearingSources ? '清空中' : '清空'}
@@ -457,9 +457,9 @@ export function SettingsPage(): React.JSX.Element {
                       </Button>
                       <Button
                         className="h-8 px-2"
-                        variant="danger"
+                        variant="destructive"
                         title="删除"
-                        onClick={() => void deleteSourceItem(source)}
+                        onClick={() => setConfirmState({ type: 'deleteSource', source })}
                       >
                         <Trash2 size={15} />
                       </Button>
@@ -485,6 +485,26 @@ export function SettingsPage(): React.JSX.Element {
           onSaved={async () => {
             setDialog(undefined)
             await refreshSources()
+          }}
+        />
+      ) : null}
+      {confirmState ? (
+        <ConfirmDialog
+          confirmText={confirmState.type === 'clearSources' ? '清空' : '删除'}
+          description={
+            confirmState.type === 'clearSources'
+              ? `确定清空全部 ${sources.length} 个数据源吗？此操作不可恢复。`
+              : `确定删除数据源「${confirmState.source.name}」吗？`
+          }
+          title={confirmState.type === 'clearSources' ? '清空数据源' : '删除数据源'}
+          onCancel={() => setConfirmState(undefined)}
+          onConfirm={async () => {
+            if (confirmState.type === 'clearSources') {
+              await clearAllSources()
+            } else {
+              await deleteSourceItem(confirmState.source)
+            }
+            setConfirmState(undefined)
           }}
         />
       ) : null}
@@ -606,7 +626,7 @@ function SourceDialog({
           <Button variant="ghost" onClick={onClose}>
             取消
           </Button>
-          <Button disabled={isSaving} variant="primary" onClick={save}>
+          <Button disabled={isSaving} onClick={save}>
             {isSaving ? '保存中...' : '保存'}
           </Button>
         </div>

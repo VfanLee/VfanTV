@@ -40,7 +40,9 @@
     "@xmldom/xmldom": "^0.8.13",
     "axios": "^1.17.0",
     "better-sqlite3": "^12.10.0",
+    "class-variance-authority": "^0.7.1",
     "drizzle-orm": "^0.45.2",
+    "radix-ui": "^1.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
