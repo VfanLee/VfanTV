@@ -1,6 +1,6 @@
 export * from './ipc'
 export * from './favorite'
-export * from './media'
+export * from './live'
 export * from './recent'
 export * from './search'
 export * from './settings'

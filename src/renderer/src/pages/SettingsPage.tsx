@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Check, Download, GripVertical, Pencil, Plus, RefreshCw, Rss, Trash2, Upload } from 'lucide-react'
+import { Check, Download, GripVertical, Pencil, Plus, RefreshCw, Rss, Trash2, Tv, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import type { VodSourceConfig, VodSourceInput } from '@shared/types'
+import type { LiveSourceConfig, VodSourceConfig, VodSourceInput } from '@shared/types'
 import { ConfirmDialog, SettingsCard, ThemeSettings } from '@renderer/components'
 import { Badge } from '@renderer/components/ui/badge'
 import { Button } from '@renderer/components/ui/button'
@@ -29,12 +29,22 @@ interface SourceDialogState {
   source?: VodSourceConfig
 }
 
-type ConfirmState = { type: 'clearSources' } | { type: 'deleteSource'; source: VodSourceConfig }
+type LiveSourceDialogState = { mode: 'create' } | { mode: 'edit'; source: LiveSourceConfig }
+
+type ConfirmState =
+  | { type: 'clearSources' }
+  | { type: 'deleteSource'; source: VodSourceConfig }
+  | { type: 'deleteLiveSource'; source: LiveSourceConfig }
 
 const emptySourceInput: VodSourceInput = {
   name: '',
   baseUrl: '',
   enabled: false,
+}
+
+const emptyLiveSourceInput = {
+  name: '',
+  url: '',
 }
 
 export function SettingsPage(): React.JSX.Element {
@@ -46,8 +56,10 @@ export function SettingsPage(): React.JSX.Element {
   const [dragOverSourceId, setDragOverSourceId] = useState<string>()
   const [isReordering, setIsReordering] = useState(false)
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
+  const [liveSources, setLiveSources] = useState<LiveSourceConfig[]>([])
   const [isSyncingSubscription, setIsSyncingSubscription] = useState(false)
   const [dialog, setDialog] = useState<SourceDialogState>()
+  const [liveSourceDialog, setLiveSourceDialog] = useState<LiveSourceDialogState>()
   const [confirmState, setConfirmState] = useState<ConfirmState>()
   const apiAvailable = isApiAvailable()
   const enabledCount = sources.filter((source) => source.enabled).length
@@ -70,6 +82,7 @@ export function SettingsPage(): React.JSX.Element {
       if (!active) return
       setSources(nextSources)
       setSubscriptionUrl(settings?.subscriptionUrl ?? '')
+      setLiveSources(settings?.liveSources ?? [])
     })
 
     return () => {
@@ -165,6 +178,29 @@ export function SettingsPage(): React.JSX.Element {
     } finally {
       setIsClearingSources(false)
     }
+  }
+
+  const saveLiveSources = async (nextLiveSources: LiveSourceConfig[]): Promise<void> => {
+    if (!apiAvailable) {
+      toast.error('当前环境不可用', {
+        description: '请在桌面应用中管理直播源。',
+      })
+      return
+    }
+
+    try {
+      const nextSettings = await updateSettings({ liveSources: nextLiveSources })
+      setLiveSources(nextSettings.liveSources)
+      toast.success('直播源已保存')
+    } catch (error) {
+      toast.error('保存失败', {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const deleteLiveSource = async (source: LiveSourceConfig): Promise<void> => {
+    await saveLiveSources(liveSources.filter((item) => item.id !== source.id))
   }
 
   const deleteSourceItem = async (source: VodSourceConfig): Promise<void> => {
@@ -476,6 +512,69 @@ export function SettingsPage(): React.JSX.Element {
             </div>
           )}
         </SettingsCard>
+
+        <SettingsCard
+          description="管理远程 M3U/M3U8 直播播放列表地址。"
+          headerActions={<Badge>{liveSources.length} 个源</Badge>}
+          title="直播源管理"
+        >
+          <div className="border-border flex flex-wrap gap-2 border-b px-5 py-5">
+            <Button disabled={!apiAvailable} onClick={() => setLiveSourceDialog({ mode: 'create' })}>
+              <Plus size={16} />
+              添加直播源
+            </Button>
+          </div>
+
+          {liveSources.length > 0 ? (
+            <div className="h-[280px] overflow-auto">
+              <div className="min-w-[720px]">
+                <div className="border-border bg-muted text-muted-foreground sticky top-0 z-10 grid grid-cols-[1fr_2fr_132px] items-center border-b px-5 py-3 font-medium">
+                  <div>名称</div>
+                  <div>URL</div>
+                  <div className="text-right">操作</div>
+                </div>
+                {liveSources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="border-border hover:bg-muted grid grid-cols-[1fr_2fr_132px] items-center border-b px-5 py-4 transition-colors last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-foreground flex items-center gap-2 truncate text-sm font-medium">
+                        <Tv className="text-muted-foreground shrink-0" size={16} />
+                        <span className="truncate">{source.name}</span>
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground min-w-0 truncate font-mono text-xs">{source.url}</div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        className="h-8 px-2"
+                        title="编辑"
+                        variant="ghost"
+                        onClick={() => setLiveSourceDialog({ mode: 'edit', source })}
+                      >
+                        <Pencil size={15} />
+                      </Button>
+                      <Button
+                        className="h-8 px-2"
+                        title="删除"
+                        variant="destructive"
+                        onClick={() => setConfirmState({ type: 'deleteLiveSource', source })}
+                      >
+                        <Trash2 size={15} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="px-5 py-6">
+              <div className="border-input rounded-xl p-10 text-center">
+                <div className="text-muted-foreground text-sm font-semibold">暂无直播源</div>
+              </div>
+            </div>
+          )}
+        </SettingsCard>
       </div>
 
       {dialog ? (
@@ -488,21 +587,42 @@ export function SettingsPage(): React.JSX.Element {
           }}
         />
       ) : null}
+      {liveSourceDialog ? (
+        <LiveSourceDialog
+          dialog={liveSourceDialog}
+          liveSources={liveSources}
+          onClose={() => setLiveSourceDialog(undefined)}
+          onSaved={async (nextLiveSources) => {
+            await saveLiveSources(nextLiveSources)
+            setLiveSourceDialog(undefined)
+          }}
+        />
+      ) : null}
       {confirmState ? (
         <ConfirmDialog
           confirmText={confirmState.type === 'clearSources' ? '清空' : '删除'}
           description={
             confirmState.type === 'clearSources'
               ? `确定清空全部 ${sources.length} 个数据源吗？此操作不可恢复。`
-              : `确定删除数据源「${confirmState.source.name}」吗？`
+              : confirmState.type === 'deleteSource'
+                ? `确定删除数据源「${confirmState.source.name}」吗？`
+                : `确定删除直播源「${confirmState.source.name}」吗？`
           }
-          title={confirmState.type === 'clearSources' ? '清空数据源' : '删除数据源'}
+          title={
+            confirmState.type === 'clearSources'
+              ? '清空数据源'
+              : confirmState.type === 'deleteSource'
+                ? '删除数据源'
+                : '删除直播源'
+          }
           onCancel={() => setConfirmState(undefined)}
           onConfirm={async () => {
             if (confirmState.type === 'clearSources') {
               await clearAllSources()
-            } else {
+            } else if (confirmState.type === 'deleteSource') {
               await deleteSourceItem(confirmState.source)
+            } else {
+              await deleteLiveSource(confirmState.source)
             }
             setConfirmState(undefined)
           }}
@@ -510,6 +630,134 @@ export function SettingsPage(): React.JSX.Element {
       ) : null}
     </div>
   )
+}
+
+function LiveSourceDialog({
+  dialog,
+  liveSources,
+  onClose,
+  onSaved,
+}: {
+  dialog: LiveSourceDialogState
+  liveSources: LiveSourceConfig[]
+  onClose: () => void
+  onSaved: (nextLiveSources: LiveSourceConfig[]) => Promise<void>
+}): React.JSX.Element {
+  const [form, setForm] = useState(() =>
+    dialog.mode === 'edit' ? { name: dialog.source.name, url: dialog.source.url } : emptyLiveSourceInput,
+  )
+  const [isSaving, setIsSaving] = useState(false)
+  const title = dialog.mode === 'create' ? '添加直播源' : '编辑直播源'
+
+  const save = async (): Promise<void> => {
+    const name = form.name.trim()
+    const url = form.url.trim()
+
+    if (!name || !url) {
+      toast.error('请填写直播源名称和地址')
+      return
+    }
+
+    try {
+      const parsedUrl = new URL(url)
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error('直播源地址仅支持 HTTP 或 HTTPS')
+      }
+    } catch (error) {
+      toast.error('直播源地址无效', {
+        description: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+
+    const duplicated = liveSources.some(
+      (source) => source.url === url && (dialog.mode === 'create' || source.id !== dialog.source.id),
+    )
+    if (duplicated) {
+      toast.error('直播源地址已存在')
+      return
+    }
+
+    setIsSaving(true)
+    const now = Date.now()
+
+    try {
+      const nextLiveSources =
+        dialog.mode === 'create'
+          ? [
+              ...liveSources,
+              {
+                id: createLiveSourceId(),
+                name,
+                url,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ]
+          : liveSources.map((source) =>
+              source.id === dialog.source.id
+                ? {
+                    ...source,
+                    name,
+                    url,
+                    updatedAt: now,
+                  }
+                : source,
+            )
+
+      await onSaved(nextLiveSources)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-background/45 fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="border-border bg-card w-full max-w-lg rounded-xl border p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-foreground text-lg font-semibold">{title}</h2>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <label className="block">
+            <span className="text-foreground text-sm font-medium">直播源名称</span>
+            <Input
+              className="mt-2"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-foreground text-sm font-medium">在线地址</span>
+            <Input
+              className="mt-2 font-mono text-xs"
+              placeholder="https://example.com/live.m3u"
+              type="url"
+              value={form.url}
+              onChange={(event) => setForm((current) => ({ ...current, url: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void save()
+              }}
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            取消
+          </Button>
+          <Button disabled={isSaving} onClick={save}>
+            {isSaving ? '保存中...' : '保存'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function createLiveSourceId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `live-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function SelectionCheckbox({

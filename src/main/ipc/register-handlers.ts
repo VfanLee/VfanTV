@@ -12,6 +12,8 @@ import { DoubanService } from '../services/douban.service'
 import { openExternalUrl } from '../services/external-link'
 import { HomeService } from '../services/home.service'
 import { HttpClient } from '../services/http-client'
+import { MediaProxyServer } from '../services/media-proxy-server'
+import { LivePlaylistService } from '../services/live-playlist.service'
 import { probeMediaSource } from '../services/media-probe.service'
 import { SearchTaskManager } from '../services/search-task-manager'
 import { SettingsService } from '../services/settings.service'
@@ -37,6 +39,8 @@ export function registerIpcHandlers(): void {
   const sourceService = new SourceService(sourceRepository)
   const doubanService = new DoubanService(httpClient)
   const homeService = new HomeService(recentPlayRepository, doubanService)
+  const mediaProxyServer = new MediaProxyServer()
+  const livePlaylistService = new LivePlaylistService(httpClient)
   const settingsService = new SettingsService(settingsRepository)
   const searchTaskManager = new SearchTaskManager()
   const emitSearchEvent = (event: SearchEvent): void => {
@@ -161,6 +165,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vod:probe-media', (_event, input: Parameters<AppApi['vod']['probeMedia']>[0]) =>
     probeMediaSource(input),
   )
+  ipcMain.handle('live:load-playlist', (_event, url: Parameters<AppApi['live']['loadPlaylist']>[0]) =>
+    livePlaylistService.load(url),
+  )
+  ipcMain.handle('media:get-proxy-base-url', () => mediaProxyServer.getBaseUrl())
   ipcMain.handle('settings:get', () => settingsService.get())
   ipcMain.handle('settings:update', (_event, input: Parameters<AppApi['settings']['update']>[0]) =>
     settingsService.update(input),

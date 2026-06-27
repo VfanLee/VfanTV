@@ -41,6 +41,12 @@ const api: AppApi = {
       return () => ipcRenderer.removeListener('vod:search-event', handler)
     },
   },
+  live: {
+    loadPlaylist: (url) => ipcRenderer.invoke('live:load-playlist', url),
+  },
+  media: {
+    getProxyBaseUrl: () => ipcRenderer.invoke('media:get-proxy-base-url'),
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     update: (input) => ipcRenderer.invoke('settings:update', input),

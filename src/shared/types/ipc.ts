@@ -9,6 +9,7 @@ import type {
 } from './source'
 import type { AppSettings } from './settings'
 import type { FavoriteInput, FavoriteItem } from './favorite'
+import type { LivePlaylist } from './live'
 import type { RecentPlayInput, RecentPlayItem } from './recent'
 import type { SearchEvent } from './search'
 import type { MediaProbeInput, MediaProbeResult, RecommendationItem } from './vod'
@@ -85,6 +86,12 @@ export interface AppApi {
     cancelSearch: (searchId: string) => Promise<void>
     probeMedia: (input: MediaProbeInput) => Promise<MediaProbeResult>
     onSearchEvent: (listener: (event: SearchEvent) => void) => () => void
+  }
+  live: {
+    loadPlaylist: (url: string) => Promise<LivePlaylist>
+  }
+  media: {
+    getProxyBaseUrl: () => Promise<string>
   }
   settings: {
     get: () => Promise<AppSettings>
