@@ -5,7 +5,7 @@ import type { LiveChannel, LivePlaylist, LiveSourceConfig } from '@shared/types'
 import { resolveImageUrl } from '@shared/utils/media-image'
 import { BasicPlayer } from '@renderer/components'
 import { cn } from '@renderer/lib/utils'
-import { getMediaProxyBaseUrl, getSettings, isApiAvailable, loadLivePlaylist } from '@renderer/services/api'
+import { getMediaProxyBaseUrl, isApiAvailable, listLiveSources, loadLivePlaylist } from '@renderer/services/api'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 
@@ -83,10 +83,10 @@ export function LivePage(): React.JSX.Element {
   useEffect(() => {
     let active = true
 
-    void Promise.all([getSettings(), getMediaProxyBaseUrl()])
-      .then(([settings, proxyBaseUrl]) => {
+    void Promise.all([listLiveSources(), getMediaProxyBaseUrl()])
+      .then(([sources, proxyBaseUrl]) => {
         if (!active) return
-        const nextSources = settings?.liveSources ?? []
+        const nextSources = sources.filter((source) => source.enabled)
         const storedSourceId = window.localStorage.getItem(LIVE_SELECTED_SOURCE_STORAGE_KEY)
         const initialSourceId = nextSources.some((source) => source.id === storedSourceId)
           ? (storedSourceId ?? '')
