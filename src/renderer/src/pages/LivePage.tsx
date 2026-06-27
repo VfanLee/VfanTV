@@ -8,6 +8,14 @@ import { cn } from '@renderer/lib/utils'
 import { getMediaProxyBaseUrl, isApiAvailable, listLiveSources, loadLivePlaylist } from '@renderer/services/api'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@renderer/components/ui/select'
 
 const LIVE_PLAYLIST_CACHE_PREFIX = 'vfantv-live-playlist:'
 const LIVE_SELECTED_SOURCE_STORAGE_KEY = 'vfantv-live-selected-source-id'
@@ -153,25 +161,32 @@ export function LivePage(): React.JSX.Element {
         <aside className="flex min-h-0 flex-col gap-4">
           <div className="border-border bg-card rounded-xl border px-4 py-4">
             <div className="flex items-center gap-2">
-              <select
-                className="border-input bg-background text-foreground focus-visible:ring-ring h-10 min-w-0 flex-1 rounded-xl border px-3 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
-                value={selectedSourceId}
-                onChange={(event) => {
-                  setSelectedSourceId(event.target.value)
-                  window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, event.target.value)
-                  setPlaylist(undefined)
-                  setActiveChannelId('')
-                  setActiveStreamId('')
-                }}
-              >
-                {liveSources.length === 0 ? <option value="">暂无直播源</option> : null}
-                {liveSources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.name}
-                  </option>
-                ))}
-              </select>
+              <div className="min-w-0 flex-1">
+                <Select
+                  disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
+                  value={selectedSourceId || undefined}
+                  onValueChange={(sourceId) => {
+                    setSelectedSourceId(sourceId)
+                    window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, sourceId)
+                    setPlaylist(undefined)
+                    setActiveChannelId('')
+                    setActiveStreamId('')
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="暂无直播源" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectGroup>
+                      {liveSources.map((source) => (
+                        <SelectItem key={source.id} value={source.id}>
+                          {source.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 disabled={!selectedSource || isLoadingPlaylist}
                 onClick={() => void loadPlaylist({ force: true })}

@@ -576,12 +576,6 @@ export function SettingsPage(): React.JSX.Element {
 
         <SettingsCard description="备份、恢复迁移数据，或初始化应用到新安装状态。" title="数据管理">
           <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
-            <div className="min-w-0">
-              <div className="text-foreground text-sm font-medium">应用数据</div>
-              <div className="text-muted-foreground mt-1 text-sm">
-                导出/导入订阅、数据源、最近观看、收藏和搜索历史；初始化会清空业务数据和本地缓存。
-              </div>
-            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={!apiAvailable || isExportingAppData}
@@ -1059,7 +1053,7 @@ function StatusCell({
 }): React.JSX.Element {
   return (
     <div className="flex items-center gap-2">
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch aria-label={checked ? '开启' : '关闭'} checked={checked} onCheckedChange={onCheckedChange} />
       <span className="text-muted-foreground text-xs">{checked ? '开启' : '关闭'}</span>
     </div>
   )
