@@ -11,6 +11,8 @@ export default defineConfig(
       '**/node_modules',
       '**/dist',
       '**/out',
+      'components.json',
+      'src/renderer/src/assets/main.css',
       'src/renderer/src/components/ui/**',
       'src/renderer/src/lib/utils.ts',
     ],
