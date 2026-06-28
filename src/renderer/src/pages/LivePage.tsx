@@ -37,6 +37,7 @@ export function LivePage(): React.JSX.Element {
     activeChannel?.streams.find((stream) => stream.id === activeStreamId) ?? activeChannel?.streams[0]
   const playerSrc = resolveLivePlaybackUrl(liveProxyBaseUrl, activeStream?.url)
   const activeStreamIsLive = isLikelyHlsStream(activeStream?.url)
+  const playerTitle = activeChannel?.title
   const groupedChannels = useMemo(() => groupChannels(playlist?.channels ?? [], keyword), [keyword, playlist])
   const channelCount = playlist?.channels.length ?? 0
   const streamCount = playlist?.channels.reduce((total, channel) => total + channel.streams.length, 0) ?? 0
@@ -144,144 +145,155 @@ export function LivePage(): React.JSX.Element {
 
   return (
     <div className="bg-background text-foreground h-screen overflow-hidden p-4">
-      <div className="mx-auto grid h-full max-w-[1760px] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="flex min-h-0 flex-col gap-4">
-          <div className="border-border bg-card min-h-0 flex-1 overflow-hidden rounded-xl border">
-            <BasicPlayer
-              autoPlay
-              className="h-full"
-              loop={!activeStreamIsLive}
-              src={playerSrc}
-              sourceType={activeStreamIsLive ? 'hls' : undefined}
-              title={activeChannel ? `正在播放：${activeChannel.title}` : undefined}
-            />
-          </div>
-        </section>
+      <div className="mx-auto flex h-full max-w-[1760px] flex-col gap-4">
+        <NowPlayingTitle title={playerTitle} />
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <section className="min-h-0">
+            <div className="border-border bg-card h-full min-h-0 overflow-hidden rounded-xl border">
+              <BasicPlayer
+                autoPlay
+                className="h-full"
+                loop={!activeStreamIsLive}
+                src={playerSrc}
+                sourceType={activeStreamIsLive ? 'hls' : undefined}
+                title={playerTitle}
+              />
+            </div>
+          </section>
 
-        <aside className="flex min-h-0 flex-col gap-4">
-          <div className="border-border bg-card rounded-xl border px-4 py-4">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <Select
-                  disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
-                  value={selectedSourceId || undefined}
-                  onValueChange={(sourceId) => {
-                    setSelectedSourceId(sourceId)
-                    window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, sourceId)
-                    setPlaylist(undefined)
-                    setActiveChannelId('')
-                    setActiveStreamId('')
-                  }}
+          <aside className="flex min-h-0 flex-col gap-4">
+            <div className="border-border bg-card rounded-xl border px-4 py-4">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <Select
+                    disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
+                    value={selectedSourceId || undefined}
+                    onValueChange={(sourceId) => {
+                      setSelectedSourceId(sourceId)
+                      window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, sourceId)
+                      setPlaylist(undefined)
+                      setActiveChannelId('')
+                      setActiveStreamId('')
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="暂无直播源" />
+                    </SelectTrigger>
+                    <SelectContent position="popper" align="start">
+                      <SelectGroup>
+                        {liveSources.map((source) => (
+                          <SelectItem key={source.id} value={source.id}>
+                            {source.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  disabled={!selectedSource || isLoadingPlaylist}
+                  onClick={() => void loadPlaylist({ force: true })}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="暂无直播源" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" align="start">
-                    <SelectGroup>
-                      {liveSources.map((source) => (
-                        <SelectItem key={source.id} value={source.id}>
-                          {source.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                  {isLoadingPlaylist ? <RefreshCw className="animate-spin" size={16} /> : <Radio size={16} />}
+                  {isLoadingPlaylist ? '加载中' : '加载'}
+                </Button>
               </div>
-              <Button
-                disabled={!selectedSource || isLoadingPlaylist}
-                onClick={() => void loadPlaylist({ force: true })}
-              >
-                {isLoadingPlaylist ? <RefreshCw className="animate-spin" size={16} /> : <Radio size={16} />}
-                {isLoadingPlaylist ? '加载中' : '加载'}
-              </Button>
-            </div>
-            <div className="text-muted-foreground mt-3 text-sm">
-              {channelCount} 个频道 · {streamCount} 条线路
-            </div>
-          </div>
-
-          <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-            <div className="border-border border-b p-4">
-              <div className="border-input bg-background flex h-10 items-center gap-2 rounded-xl border px-3">
-                <Search className="text-muted-foreground shrink-0" size={17} />
-                <Input
-                  className="h-full border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                  placeholder="搜索频道"
-                  value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
-                />
+              <div className="text-muted-foreground mt-3 text-sm">
+                {channelCount} 个频道 · {streamCount} 条线路
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto">
-              {groupedChannels.length > 0 ? (
-                <div className="flex flex-col p-4">
-                  {groupedChannels.map((group) => (
-                    <section key={group.name} className="border-border border-b last:border-b-0">
-                      <button
-                        aria-expanded={expandedGroups.has(group.name)}
-                        className="hover:bg-muted/70 focus-visible:ring-ring flex h-12 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors outline-none focus-visible:ring-2"
-                        type="button"
-                        onClick={() => toggleGroup(group.name)}
+            <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+              <div className="border-border border-b p-4">
+                <div className="border-input bg-background flex h-10 items-center gap-2 rounded-xl border px-3">
+                  <Search className="text-muted-foreground shrink-0" size={17} />
+                  <Input
+                    className="h-full border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                    placeholder="搜索频道"
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-auto">
+                {groupedChannels.length > 0 ? (
+                  <div className="flex flex-col p-4">
+                    {groupedChannels.map((group) => (
+                      <section key={group.name} className="border-border border-b last:border-b-0">
+                        <button
+                          aria-expanded={expandedGroups.has(group.name)}
+                          className="hover:bg-muted/70 focus-visible:ring-ring flex h-12 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors outline-none focus-visible:ring-2"
+                          type="button"
+                          onClick={() => toggleGroup(group.name)}
+                        >
+                          <ChevronDown
+                            className={cn(
+                              'text-muted-foreground shrink-0 transition-transform',
+                              expandedGroups.has(group.name) ? 'rotate-0' : '-rotate-90',
+                            )}
+                            size={16}
+                          />
+                          <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-semibold">
+                            {group.name}
+                          </span>
+                          <span className="text-muted-foreground shrink-0 text-xs font-semibold">
+                            {group.channels.length}
+                          </span>
+                        </button>
+                        {expandedGroups.has(group.name) ? (
+                          <div className="flex flex-col gap-1.5 pb-3">
+                            {group.channels.map((channel) => (
+                              <ChannelButton
+                                key={channel.id}
+                                active={channel.id === activeChannelId}
+                                channel={channel}
+                                onClick={() => selectChannel(channel)}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyLiveState
+                    isLoading={isLoadingPlaylist || isLoadingSettings}
+                    hasSources={liveSources.length > 0}
+                    hasPlaylist={Boolean(playlist)}
+                  />
+                )}
+              </div>
+
+              {activeChannel && activeChannel.streams.length > 1 ? (
+                <div className="border-border bg-muted/40 border-t p-4">
+                  <div className="mb-2 text-xs font-semibold">线路</div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeChannel.streams.map((stream) => (
+                      <Button
+                        key={stream.id}
+                        size="sm"
+                        variant={stream.id === activeStream?.id ? 'default' : 'outline'}
+                        onClick={() => setActiveStreamId(stream.id)}
                       >
-                        <ChevronDown
-                          className={cn(
-                            'text-muted-foreground shrink-0 transition-transform',
-                            expandedGroups.has(group.name) ? 'rotate-0' : '-rotate-90',
-                          )}
-                          size={16}
-                        />
-                        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-semibold">
-                          {group.name}
-                        </span>
-                        <span className="text-muted-foreground shrink-0 text-xs font-semibold">
-                          {group.channels.length}
-                        </span>
-                      </button>
-                      {expandedGroups.has(group.name) ? (
-                        <div className="flex flex-col gap-1.5 pb-3">
-                          {group.channels.map((channel) => (
-                            <ChannelButton
-                              key={channel.id}
-                              active={channel.id === activeChannelId}
-                              channel={channel}
-                              onClick={() => selectChannel(channel)}
-                            />
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
-                  ))}
+                        {stream.name}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <EmptyLiveState
-                  isLoading={isLoadingPlaylist || isLoadingSettings}
-                  hasSources={liveSources.length > 0}
-                  hasPlaylist={Boolean(playlist)}
-                />
-              )}
+              ) : null}
             </div>
-
-            {activeChannel && activeChannel.streams.length > 1 ? (
-              <div className="border-border bg-muted/40 border-t p-4">
-                <div className="mb-2 text-xs font-semibold">线路</div>
-                <div className="flex flex-wrap gap-2">
-                  {activeChannel.streams.map((stream) => (
-                    <Button
-                      key={stream.id}
-                      size="sm"
-                      variant={stream.id === activeStream?.id ? 'default' : 'outline'}
-                      onClick={() => setActiveStreamId(stream.id)}
-                    >
-                      {stream.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </aside>
+          </aside>
+        </div>
       </div>
+    </div>
+  )
+}
+
+function NowPlayingTitle({ title }: { title?: string }): React.JSX.Element {
+  return (
+    <div className="flex h-12 shrink-0 items-center pl-2 text-xl leading-6 font-semibold">
+      <span className="truncate">正在播放：{title ?? '请选择频道'}</span>
     </div>
   )
 }

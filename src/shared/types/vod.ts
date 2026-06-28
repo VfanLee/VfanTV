@@ -26,7 +26,7 @@ export interface RecommendationItem {
   rating?: number
   ratingStarCount?: number
   isNew?: boolean
-  category: 'movie' | 'tv' | 'show'
+  category: 'movie' | 'tv' | 'animation' | 'documentary' | 'show'
   raw: unknown
 }
 

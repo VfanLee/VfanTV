@@ -68,28 +68,30 @@ export function HotPage(): React.JSX.Element {
   return (
     <div className="bg-background text-foreground min-h-full px-10 py-7">
       <div className="mx-auto max-w-[1500px]">
-        <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <header className="mb-5 flex h-11 shrink-0 items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <CategoryIcon className="text-primary" size={22} />
               <h1 className="text-2xl font-semibold tracking-tight">热门{activeSection.title}</h1>
             </div>
           </div>
-          <div className="border-border bg-card flex flex-wrap rounded-xl border p-1">
-            {activeSection.filters.map((filter) => (
-              <button
-                key={filter.value}
-                className={cn(
-                  'text-muted-foreground hover:text-foreground focus-visible:ring-ring h-9 rounded-xl px-4 text-sm font-medium outline-none focus-visible:ring-2',
-                  activeType === filter.value && 'bg-accent text-primary',
-                )}
-                type="button"
-                onClick={() => setSearchParams({ type: filter.value })}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          {activeSection.filters.length > 1 ? (
+            <div className="border-border bg-card flex flex-wrap rounded-xl border p-1">
+              {activeSection.filters.map((filter) => (
+                <button
+                  key={filter.value}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring h-9 rounded-xl px-4 text-sm font-medium outline-none focus-visible:ring-2',
+                    activeType === filter.value && 'bg-accent text-primary',
+                  )}
+                  type="button"
+                  onClick={() => setSearchParams({ type: filter.value })}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </header>
 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-6 gap-y-9">
@@ -106,7 +108,7 @@ export function HotPage(): React.JSX.Element {
         <div ref={sentinelRef} className="text-muted-foreground flex h-24 items-center justify-center text-sm">
           {categoryCache.errorMessage ? (
             <button
-              className="border-border bg-card text-muted-foreground hover:text-primary rounded-xl border px-3 py-2"
+              className="bg-card text-muted-foreground hover:text-primary px-3 py-2"
               type="button"
               onClick={() => void loadHotPage(activeSection.key, activeType)}
             >

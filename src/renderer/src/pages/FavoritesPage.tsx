@@ -57,7 +57,7 @@ export function FavoritesPage(): React.JSX.Element {
         </header>
 
         {items.length > 0 ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-6 gap-y-9">
+          <div className="grid grid-cols-[repeat(auto-fill,220px)] items-start gap-x-6 gap-y-9">
             {items.map((item) => (
               <FavoriteCard
                 key={item.id}
@@ -107,9 +107,9 @@ function FavoriteCard({
   onDelete: () => void
 }): React.JSX.Element {
   return (
-    <div className="group relative min-w-0">
+    <div className="group relative w-[220px] min-w-0 self-start rounded-xl">
       <button
-        className="focus-visible:ring-ring focus-visible:ring-offset-background w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        className="focus-visible:ring-ring focus-visible:ring-offset-background w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
         type="button"
         onClick={onClick}
       >

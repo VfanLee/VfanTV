@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowLeft, ArrowUpDown, CheckCircle2, Heart, ListVideo, Loader2, Radio, RefreshCw } from 'lucide-react'
+import { ArrowUpDown, CheckCircle2, Heart, ListVideo, Loader2, Radio, RefreshCw } from 'lucide-react'
 import type { FavoriteInput, PlayLine, RecentPlayInput, VodSearchResult } from '@shared/types'
 import { parseVodPlayUrl } from '@shared/utils/vod-play-url'
 import { BasicPlayer, MediaPoster } from '@renderer/components'
@@ -71,6 +71,7 @@ export function PlayerPage(): React.JSX.Element {
   })
   const refreshSearchIdRef = useRef<string | undefined>(undefined)
   const probeAfterRefreshRef = useRef(false)
+  const autoRefreshedSourcesRef = useRef<Set<string>>(new Set())
   const autoHydratedTitleRef = useRef<Set<string>>(new Set())
   const lastProgressSaveRef = useRef(0)
   const playbackProgressRef = useRef({ currentTime: 0, duration: 0 })
@@ -120,7 +121,7 @@ export function PlayerPage(): React.JSX.Element {
     shouldApplyLocationInitialTime(locationState, activeSelection, playerSrc) && locationState?.initialTime
       ? Math.max(0, Math.floor(locationState.initialTime))
       : 0
-  const playerTitle = activeEpisode ? `正在播放：${current?.title ?? '未知资源'} - ${activeEpisode.name}` : undefined
+  const playerTitle = activeEpisode ? `${current?.title ?? '未知资源'} - ${activeEpisode.name}` : undefined
   const sameTitleCandidates = useMemo(
     () =>
       dedupeCandidates(
@@ -162,17 +163,20 @@ export function PlayerPage(): React.JSX.Element {
       }
 
       setRefreshState({ found: 0, failed: 0, finished: 0 })
+      setSourceProbeRequest(undefined)
+      setSourceProbeStates({})
       probeAfterRefreshRef.current = shouldProbe
       if (shouldProbe) {
-        setSourceProbeRequest(undefined)
         setSourceProbeStates(
           Object.fromEntries(sourceRows.map(({ item }) => [getCandidateKey(item), { status: 'loading' as const }])),
         )
       }
 
+      setIsRefreshingSources(true)
       const result = await searchVod(current.title)
       if (!result) {
         probeAfterRefreshRef.current = false
+        setIsRefreshingSources(false)
         if (shouldProbe) {
           setSourceProbeStates({})
         }
@@ -180,10 +184,49 @@ export function PlayerPage(): React.JSX.Element {
       }
 
       refreshSearchIdRef.current = result.searchId
-      setIsRefreshingSources(true)
     },
     [current, isRefreshingSources, sourceRows],
   )
+
+  const probeSources = useCallback(
+    (items = sameTitleCandidates): void => {
+      if (items.length === 0) {
+        setSourceProbeRequest(undefined)
+        setSourceProbeStates({})
+        return
+      }
+
+      setSourceProbeStates(
+        Object.fromEntries(items.map((item) => [getCandidateKey(item), { status: 'loading' as const }])),
+      )
+      setSourceProbeRequest({
+        items,
+        lineIndex: activeSelection.lineIndex,
+        episodeIndex: activeSelection.episodeIndex,
+      })
+    },
+    [activeSelection.episodeIndex, activeSelection.lineIndex, sameTitleCandidates],
+  )
+
+  const openSourcesTab = (): void => {
+    setActiveTab('sources')
+
+    const refreshKey = `${resourceKey}:${currentTitleKey}`
+    if (!currentTitleKey || autoRefreshedSourcesRef.current.has(refreshKey)) {
+      return
+    }
+
+    autoRefreshedSourcesRef.current.add(refreshKey)
+    if (isRefreshingSources) {
+      probeAfterRefreshRef.current = true
+      setSourceProbeStates(
+        Object.fromEntries(sourceRows.map(({ item }) => [getCandidateKey(item), { status: 'loading' as const }])),
+      )
+      return
+    }
+
+    void refreshSources(true)
+  }
 
   useEffect(() => {
     if (!current || !isApiAvailable() || isRefreshingSources) {
@@ -434,31 +477,39 @@ export function PlayerPage(): React.JSX.Element {
           : 'bg-background text-foreground h-screen overflow-y-auto px-8 pb-6',
       )}
     >
-      {!isTheaterMode ? (
-        <header className="border-border bg-background/95 sticky top-0 z-40 -mx-8 flex h-20 items-center border-b px-8 backdrop-blur">
-          <button
-            className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors outline-none focus-visible:ring-2"
-            type="button"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft size={18} />
-            返回
-          </button>
-        </header>
-      ) : null}
+      <div
+        className={cn(isTheaterMode ? 'min-h-0 flex-1' : 'grid h-screen gap-6 py-5 xl:grid-cols-[minmax(0,1fr)_380px]')}
+      >
+        <main
+          className={cn(
+            'min-h-0 min-w-0',
+            isTheaterMode ? 'flex h-full items-center justify-center' : 'flex flex-col gap-5',
+          )}
+        >
+          {!isTheaterMode ? (
+            <header className="flex h-10 shrink-0 items-center justify-between gap-6">
+              <button
+                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex h-10 shrink-0 items-center rounded-lg px-1 text-sm font-semibold transition-colors outline-none focus-visible:ring-2"
+                type="button"
+                onClick={() => navigate(-1)}
+              >
+                返回
+              </button>
+              <NowPlayingTitle title={playerTitle} />
+            </header>
+          ) : null}
 
-      <div className={cn(isTheaterMode ? 'min-h-0 flex-1' : 'mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]')}>
-        <main className={cn('min-h-0 min-w-0', isTheaterMode && 'flex h-full items-center justify-center')}>
           <section
             className={cn(
               'overflow-hidden bg-black',
               isTheaterMode
                 ? 'aspect-video w-full max-w-[calc(100vh*16/9)]'
-                : 'border-border w-full rounded-xl border shadow-sm',
+                : 'border-border min-h-0 flex-1 rounded-xl border shadow-sm',
             )}
           >
             <BasicPlayer
               autoPlay
+              className={!isTheaterMode ? 'h-full' : undefined}
               hasNextEpisode={hasNextEpisode}
               hasPreviousEpisode={hasPreviousEpisode}
               initialTime={initialTime}
@@ -475,7 +526,7 @@ export function PlayerPage(): React.JSX.Element {
         </main>
 
         {!isTheaterMode ? (
-          <div className="relative h-[520px] min-h-0 xl:h-auto">
+          <div className="relative min-h-0">
             <aside className="border-border bg-card absolute inset-0 flex min-h-0 flex-col rounded-xl border p-4 shadow-sm">
               <div className="bg-muted grid grid-cols-2 rounded-xl p-1">
                 <PanelTab
@@ -484,12 +535,7 @@ export function PlayerPage(): React.JSX.Element {
                   label="选集"
                   onClick={() => setActiveTab('episodes')}
                 />
-                <PanelTab
-                  active={activeTab === 'sources'}
-                  icon={Radio}
-                  label="换源"
-                  onClick={() => setActiveTab('sources')}
-                />
+                <PanelTab active={activeTab === 'sources'} icon={Radio} label="换源" onClick={openSourcesTab} />
               </div>
 
               <div className="min-h-0 flex-1 overflow-hidden">
@@ -509,7 +555,8 @@ export function PlayerPage(): React.JSX.Element {
                     probeStates={sourceProbeStates}
                     refreshState={refreshState}
                     rows={sourceRows}
-                    onRefresh={() => void refreshSources(true)}
+                    onProbe={() => probeSources()}
+                    onRefresh={() => void refreshSources()}
                     onSelect={selectSource}
                   />
                 )}
@@ -578,6 +625,14 @@ export function PlayerPage(): React.JSX.Element {
           ) : null}
         </section>
       ) : null}
+    </div>
+  )
+}
+
+function NowPlayingTitle({ title }: { title?: string }): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 flex-1 items-center justify-end text-xl leading-6 font-semibold">
+      <span className="truncate text-right">正在播放：{title ?? '请选择剧集'}</span>
     </div>
   )
 }
@@ -689,6 +744,7 @@ function EpisodesPanel({
 function SourcesPanel({
   isRefreshing,
   keyword,
+  onProbe,
   onRefresh,
   onSelect,
   probeStates,
@@ -697,25 +753,39 @@ function SourcesPanel({
 }: {
   isRefreshing: boolean
   keyword: string
+  onProbe: () => void
   onRefresh: () => void
   onSelect: (item: VodSearchResult) => void
   probeStates: Record<string, SourceProbeState>
   refreshState: SourceRefreshState
   rows: Array<{ item: VodSearchResult; count: number; isActive: boolean }>
 }): React.JSX.Element {
+  const isProbing = Object.values(probeStates).some((state) => state.status === 'loading')
+
   return (
     <section className="flex h-full min-h-0 flex-col pt-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm font-medium">当前缓存来源 {rows.length} 个</p>
-        <button
-          className="border-border bg-card text-primary hover:bg-accent focus-visible:ring-ring inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isRefreshing}
-          type="button"
-          onClick={onRefresh}
-        >
-          {isRefreshing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-          {isRefreshing ? '刷新中...' : '刷新'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            className="border-border bg-card text-primary hover:bg-accent focus-visible:ring-ring inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isRefreshing}
+            type="button"
+            onClick={onRefresh}
+          >
+            {isRefreshing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+            {isRefreshing ? '刷新中...' : '刷新'}
+          </button>
+          <button
+            className="border-border bg-card text-primary hover:bg-accent focus-visible:ring-ring inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isRefreshing || isProbing || rows.length === 0}
+            type="button"
+            onClick={onProbe}
+          >
+            {isProbing ? <Loader2 className="animate-spin" size={16} /> : <Radio size={16} />}
+            {isProbing ? '测速中...' : '测速'}
+          </button>
+        </div>
       </div>
 
       {isRefreshing || refreshState.finished > 0 ? (

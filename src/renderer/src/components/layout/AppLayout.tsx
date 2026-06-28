@@ -8,10 +8,12 @@ import logoMarkUrl from '@renderer/assets/logo-mark.svg'
 
 const primaryNavItems: Array<{ to: string; label: string; icon: LucideIcon }> = [
   { to: '/', label: '首页', icon: Home },
-  { to: '/hot/movie', label: '电影', icon: categoryIcons.movie },
-  { to: '/hot/tv', label: '剧集', icon: categoryIcons.tv },
-  { to: '/hot/show', label: '综艺', icon: categoryIcons.show },
   { to: '/live', label: '直播', icon: Tv },
+  { to: '/hot/movie', label: '电影', icon: categoryIcons.movie },
+  { to: '/hot/tv', label: '电视剧', icon: categoryIcons.tv },
+  { to: '/hot/animation', label: '动画', icon: categoryIcons.animation },
+  { to: '/hot/documentary', label: '纪录片', icon: categoryIcons.documentary },
+  { to: '/hot/show', label: '综艺', icon: categoryIcons.show },
 ]
 
 const secondaryNavItems: Array<{ to: string; label: string; icon: LucideIcon }> = [
@@ -133,7 +135,7 @@ function LayoutSearchForm(): React.JSX.Element {
       <input
         aria-label="搜索片名"
         className="text-foreground placeholder:text-muted-foreground h-full min-w-0 flex-1 bg-transparent text-[15px] font-medium outline-none"
-        placeholder="搜索电影、电视剧、综艺，支持演员、导演"
+        placeholder="搜索电影、电视剧、动画、纪录片、综艺，支持演员、导演"
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
       />

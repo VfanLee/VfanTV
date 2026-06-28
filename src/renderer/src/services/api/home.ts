@@ -29,17 +29,26 @@ export const categorySections: HotCategorySection[] = [
   },
   {
     key: 'tv',
-    title: '剧集',
-    defaultType: 'tv',
+    title: '电视剧',
+    defaultType: 'tv_domestic',
     filters: [
-      { label: '综合', value: 'tv' },
       { label: '国产剧', value: 'tv_domestic' },
       { label: '欧美剧', value: 'tv_american' },
       { label: '日剧', value: 'tv_japanese' },
       { label: '韩剧', value: 'tv_korean' },
-      { label: '动画', value: 'tv_animation' },
-      { label: '纪录片', value: 'tv_documentary' },
     ],
+  },
+  {
+    key: 'animation',
+    title: '动画',
+    defaultType: 'tv_animation',
+    filters: [{ label: '动画', value: 'tv_animation' }],
+  },
+  {
+    key: 'documentary',
+    title: '纪录片',
+    defaultType: 'tv_documentary',
+    filters: [{ label: '纪录片', value: 'tv_documentary' }],
   },
   {
     key: 'show',

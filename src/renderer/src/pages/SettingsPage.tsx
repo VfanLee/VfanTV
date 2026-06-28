@@ -494,7 +494,7 @@ export function SettingsPage(): React.JSX.Element {
       <div className="grid gap-5">
         <ThemeSettings />
 
-        <SettingsCard description="同步后会新增或更新订阅来源的数据源。" title="订阅源管理">
+        <SettingsCard description="同步订阅源后会更新影视源、直播源。" title="订阅源管理">
           <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1">
               <span className="text-foreground mb-2 block text-sm font-medium">订阅地址</span>
@@ -574,34 +574,30 @@ export function SettingsPage(): React.JSX.Element {
           onToggleSelection={toggleLiveSourceSelection}
         />
 
-        <SettingsCard description="备份、恢复迁移数据，或初始化应用到新安装状态。" title="数据管理">
-          <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={!apiAvailable || isExportingAppData}
-                variant="outline"
-                onClick={() => void exportData()}
-              >
-                <Download size={16} />
-                {isExportingAppData ? '导出中' : '导出数据'}
-              </Button>
-              <Button
-                disabled={!apiAvailable || isImportingAppData}
-                variant="outline"
-                onClick={() => setConfirmState({ type: 'importAppData' })}
-              >
-                <Upload size={16} />
-                {isImportingAppData ? '导入中' : '导入数据'}
-              </Button>
-              <Button
-                disabled={!apiAvailable || isInitializingAppData}
-                variant="destructive"
-                onClick={() => setConfirmState({ type: 'initializeAppData' })}
-              >
-                <Trash2 size={16} />
-                {isInitializingAppData ? '初始化中' : '初始化'}
-              </Button>
-            </div>
+        <SettingsCard description="备份、恢复数据。" title="数据管理">
+          <div className="flex items-center gap-4 px-5 py-5">
+            <Button disabled={!apiAvailable || isExportingAppData} variant="outline" onClick={() => void exportData()}>
+              <Download size={16} />
+              {isExportingAppData ? '导出中' : '导出数据'}
+            </Button>
+            <Button
+              disabled={!apiAvailable || isImportingAppData}
+              variant="outline"
+              onClick={() => setConfirmState({ type: 'importAppData' })}
+            >
+              <Upload size={16} />
+              {isImportingAppData ? '导入中' : '导入数据'}
+            </Button>
+
+            <Button
+              className="ml-auto"
+              disabled={!apiAvailable || isInitializingAppData}
+              variant="destructive"
+              onClick={() => setConfirmState({ type: 'initializeAppData' })}
+            >
+              <Trash2 size={16} />
+              {isInitializingAppData ? '初始化中' : '初始化'}
+            </Button>
           </div>
         </SettingsCard>
       </div>
@@ -717,7 +713,7 @@ function SourceTableCard({
 }): React.JSX.Element {
   return (
     <SettingsCard
-      description="管理应用的 VOD 数据源，拖拽可调整顺序。"
+      description="管理应用的影视源。"
       headerActions={
         <div className="flex flex-wrap gap-2">
           <Badge>{sources.length} 个源</Badge>
@@ -839,7 +835,7 @@ function LiveSourceTableCard({
 }): React.JSX.Element {
   return (
     <SettingsCard
-      description="管理远程 M3U/M3U8 直播播放列表地址，拖拽可调整顺序。"
+      description="管理应用的直播源。"
       headerActions={
         <div className="flex flex-wrap gap-2">
           <Badge>{sources.length} 个源</Badge>

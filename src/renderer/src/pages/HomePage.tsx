@@ -71,7 +71,7 @@ export function HomePage(): React.JSX.Element {
           {recentLoading ? (
             <HomeShelfSkeleton />
           ) : recentPlays.length > 0 ? (
-            <div className="no-scrollbar grid auto-cols-[clamp(180px,16vw,210px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
+            <div className="no-scrollbar grid auto-cols-[220px] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
               {recentPlays.map((item) => (
                 <RecentPlayCard
                   key={item.id}
@@ -108,7 +108,7 @@ export function HomePage(): React.JSX.Element {
                 {isLoading ? (
                   <HomeShelfSkeleton />
                 ) : items.length > 0 ? (
-                  <div className="no-scrollbar grid auto-cols-[clamp(180px,16vw,210px)] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
+                  <div className="no-scrollbar grid auto-cols-[220px] grid-flow-col items-start gap-6 overflow-x-auto pb-4">
                     {items.map((item) => (
                       <RecommendationCard
                         key={`${item.category}-${item.id}`}
@@ -146,7 +146,7 @@ export function HomePage(): React.JSX.Element {
 
 function HomeShelfSkeleton(): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[repeat(6,minmax(0,194px))] gap-6 overflow-hidden pb-4">
+    <div className="grid grid-cols-[repeat(6,220px)] gap-6 overflow-hidden pb-4">
       {Array.from({ length: 6 }, (_, index) => (
         <PosterCardSkeleton key={index} />
       ))}
@@ -194,9 +194,9 @@ function RecentPlayCard({
   const progress = getProgress(item)
 
   return (
-    <div className="group relative min-w-0">
+    <div className="group relative w-[220px] min-w-0 self-start rounded-xl">
       <button
-        className="focus-visible:ring-ring focus-visible:ring-offset-background w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        className="focus-visible:ring-ring focus-visible:ring-offset-background w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
         type="button"
         onClick={onClick}
       >
