@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Loader2, Play, Radio, RefreshCw, Search, Tv } from 'lucide-react'
 import { toast } from 'sonner'
 import type { LiveChannel, LivePlaylist, LiveSourceConfig } from '@shared/types'
-import { resolveImageUrl } from '@shared/utils/media-image'
 import { BasicPlayer } from '@renderer/components'
 import { cn } from '@renderer/lib/utils'
 import { getMediaProxyBaseUrl, isApiAvailable, listLiveSources, loadLivePlaylist } from '@renderer/services/api'
@@ -387,6 +386,8 @@ function ChannelButton({
   channel: LiveChannel
   onClick: () => void
 }): React.JSX.Element {
+  const channelInitial = channel.title.trim().charAt(0).toUpperCase() || '台'
+
   return (
     <button
       className={cn(
@@ -396,18 +397,18 @@ function ChannelButton({
       type="button"
       onClick={onClick}
     >
-      {channel.logo ? (
-        <img
-          alt=""
-          className="bg-background/70 size-9 shrink-0 rounded-lg object-contain"
-          loading="lazy"
-          src={resolveImageUrl(channel.logo)}
-        />
-      ) : (
-        <span className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Tv size={16} />
+      <span
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-lg border text-sm font-bold',
+          active
+            ? 'border-primary-foreground/25 bg-primary-foreground/15 text-primary-foreground'
+            : 'border-border bg-muted text-muted-foreground',
+        )}
+      >
+        <span aria-hidden="true" className="leading-none">
+          {channelInitial}
         </span>
-      )}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{channel.title}</span>
         <span className={cn('block truncate text-xs', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>

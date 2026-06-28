@@ -121,7 +121,7 @@ export function PlayerChrome({
   const canPlay = useMediaState('canPlay')
   const started = useMediaState('started')
   const loadingState = { canLoad, canPlay, paused, seeking, started, waiting }
-  const isBuffering = isPlayerLoadingOverlayVisible(loadingState)
+  const isBuffering = isPlayerLoadingOverlayVisible(loadingState, { variant })
   const loadingMessage = resolvePlayerLoadingMessage(loadingState, { variant })
   const keyHoldRef = useRef<KeyHoldState | null>(null)
   const actionHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

@@ -256,16 +256,13 @@ export function BasicPlayer({
         hlsDisposeRef.current = null
 
         if (isHLSProvider(provider)) {
-          provider.library = async () => {
-            const hlsLibrary = await import('hls.js')
-            if (adBlockEnabled) {
-              provider.config = {
-                ...provider.config,
-                loader: createFilteredHlsLoader(hlsLibrary.default),
-              }
+          if (adBlockEnabled) {
+            provider.config = {
+              ...provider.config,
+              loader: createFilteredHlsLoader(Hls),
             }
-            return hlsLibrary
           }
+          provider.library = Hls
 
           hlsDisposeRef.current = provider.onInstance((hls) => {
             const onFragLoaded = (_event: string, data: { frag?: { stats?: { total?: number } } }): void => {

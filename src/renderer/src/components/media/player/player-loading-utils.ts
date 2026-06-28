@@ -13,9 +13,15 @@ export interface PlayerLoadingOptions {
   variant?: PlayerVariant
 }
 
-export function isPlayerLoadingOverlayVisible(state: PlayerLoadingState): boolean {
+export function isPlayerLoadingOverlayVisible(state: PlayerLoadingState, options: PlayerLoadingOptions = {}): boolean {
+  const { variant = 'vod' } = options
+
   if (state.seeking) {
     return true
+  }
+
+  if (variant === 'live') {
+    return !state.canPlay || state.waiting
   }
 
   return state.canLoad && (!state.canPlay || state.waiting)
@@ -29,8 +35,16 @@ export function resolvePlayerLoadingMessage(state: PlayerLoadingState, options: 
     return '加载中...'
   }
 
-  if (variant === 'live') {
+  if (variant === 'live' && waiting && started) {
+    return '缓冲中...'
+  }
+
+  if (variant === 'live' && !canPlay) {
     return '正在连接直播...'
+  }
+
+  if (variant === 'live' && waiting) {
+    return '缓冲中...'
   }
 
   if (waiting && started) {
