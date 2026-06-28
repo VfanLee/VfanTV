@@ -6,30 +6,15 @@ export interface PlayerErrorLog {
   fatal: boolean
 }
 
-export type ActionHint =
-  | { type: 'play' }
-  | { type: 'pause' }
-  | { type: 'seek-back'; seconds: number }
-  | { type: 'seek-forward'; seconds: number }
-  | { type: 'volume'; percent: number }
-
-export interface KeyHoldState {
-  key: string
-  timer: ReturnType<typeof setTimeout> | null
-  interval: ReturnType<typeof setInterval> | null
-  isLongPress: boolean
-}
-
 export type PlayerVariant = 'vod' | 'live'
 
 export interface PlayerControlsConfig {
   progress: boolean
   time: boolean
   settings: boolean
-  quality: boolean
-  theaterMode: boolean
   keyboardSeek: boolean
-  adBlock: boolean
+  loopToggle: boolean
+  episodeNav: boolean
 }
 
 export const PLAYER_CONTROLS_PRESETS: Record<PlayerVariant, PlayerControlsConfig> = {
@@ -37,19 +22,17 @@ export const PLAYER_CONTROLS_PRESETS: Record<PlayerVariant, PlayerControlsConfig
     progress: true,
     time: true,
     settings: true,
-    quality: true,
-    theaterMode: true,
     keyboardSeek: true,
-    adBlock: true,
+    loopToggle: false,
+    episodeNav: true,
   },
   live: {
     progress: false,
     time: false,
     settings: false,
-    quality: true,
-    theaterMode: true,
     keyboardSeek: false,
-    adBlock: false,
+    loopToggle: true,
+    episodeNav: false,
   },
 }
 

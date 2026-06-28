@@ -47,7 +47,9 @@ export function LivePage(): React.JSX.Element {
   const hasNextStream =
     activeChannel != null && activeStreamIndex >= 0 && activeStreamIndex < activeChannel.streams.length - 1
   const playerSrc = resolveLivePlaybackUrl(liveProxyBaseUrl, activeStream?.url)
-  const activeStreamIsLive = isLikelyHlsStream(activeStream?.url)
+  const activeStreamIsSeekable = isLikelySeekableMediaUrl(activeStream?.url)
+  const playerSeekable = activeStreamIsSeekable ? true : 'auto'
+  const activeStreamUsesHls = !activeStreamIsSeekable
   const playerTitle = activeChannel?.title
   const groupedChannels = useMemo(() => groupChannels(playlist?.channels ?? [], keyword), [keyword, playlist])
   const channelCount = playlist?.channels.length ?? 0
@@ -225,9 +227,10 @@ export function LivePage(): React.JSX.Element {
                 hasNextEpisode={hasNextStream}
                 hasPreviousEpisode={hasPreviousStream}
                 isTheaterMode={isTheaterMode}
-                loop={!activeStreamIsLive}
+                loop={activeStreamIsSeekable}
                 navigationLabels={{ next: '下一线路', previous: '上一线路' }}
-                sourceType={activeStreamIsLive ? 'hls' : undefined}
+                seekable={playerSeekable}
+                sourceType={activeStreamUsesHls || isLikelyHlsStream(activeStream?.url) ? 'hls' : undefined}
                 src={playerSrc}
                 title={playerTitle}
                 variant="live"
@@ -601,5 +604,18 @@ function isLikelyHlsStream(url: string | undefined): boolean {
     )
   } catch {
     return /\.m3u8(?:$|[?#])/i.test(url)
+  }
+}
+
+function isLikelySeekableMediaUrl(url: string | undefined): boolean {
+  if (!url) {
+    return false
+  }
+
+  try {
+    const parsedUrl = new URL(url)
+    return /\.(?:mp4|m4v|mov|webm|mkv|avi|flv)(?:$|[?#])/i.test(parsedUrl.pathname)
+  } catch {
+    return /\.(?:mp4|m4v|mov|webm|mkv|avi|flv)(?:$|[?#])/i.test(url)
   }
 }
