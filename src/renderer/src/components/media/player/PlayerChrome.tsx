@@ -8,14 +8,16 @@ import {
   VolumeSlider,
   useMediaState,
   type MediaPlayerInstance,
+  type VideoQuality,
 } from '@vidstack/react'
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   FastForward,
   Gauge,
-  Info,
   Loader2,
+  Monitor,
   Minus,
   Pause,
   Play,
@@ -33,8 +35,20 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
-import { PlayerErrorLogDialog, PlaySourceDialog } from './PlayerDialogs'
-import type { ActionHint, KeyHoldState, PlayerErrorLog } from './types'
+import { PlayerErrorLogDialog } from './PlayerDialogs'
+import { PlayerStatsOverlay } from './PlayerStatsOverlay'
+import { usePlayerStats } from './usePlayerStats'
+import { formatBitrate } from './player-stats-utils'
+import { isPlayerLoadingOverlayVisible, resolvePlayerLoadingMessage } from './player-loading-utils'
+import type {
+  ActionHint,
+  HlsSessionStats,
+  KeyHoldState,
+  PlayerControlsConfig,
+  PlayerErrorLog,
+  PlayerNavigationLabels,
+  PlayerVariant,
+} from './types'
 
 const SPEED_PRESETS = [1, 1.25, 1.5, 2, 3] as const
 const SEEK_PRESETS = [5, 10, 15, 30] as const
@@ -47,17 +61,21 @@ const LONG_VOLUME_INTERVAL_MS = 80
 const ACTION_HINT_HIDE_MS = 700
 const CONTROLS_IDLE_HIDE_MS = 5000
 
-type SettingsPage = 'root' | 'seek' | 'speed'
+type SettingsPage = 'root' | 'seek' | 'speed' | 'quality'
 
 interface PlayerChromeProps {
+  controls: PlayerControlsConfig
   errorLogs: PlayerErrorLog[]
   hasNextEpisode: boolean
   hasPreviousEpisode: boolean
+  hlsSessionStats: HlsSessionStats
   isTheaterMode: boolean
+  navigationLabels?: PlayerNavigationLabels
   playlistFilteringEnabled: boolean
   playerRef: RefObject<MediaPlayerInstance | null>
   src: string
   title?: string
+  variant?: PlayerVariant
   onNextEpisode?: () => void
   onPlaybackRateChange?: (playbackRate: number) => void
   onPreviousEpisode?: () => void
@@ -67,14 +85,18 @@ interface PlayerChromeProps {
 }
 
 export function PlayerChrome({
+  controls,
   errorLogs,
   hasNextEpisode,
   hasPreviousEpisode,
+  hlsSessionStats,
   isTheaterMode,
+  navigationLabels,
   playlistFilteringEnabled,
   playerRef,
   src,
   title,
+  variant = 'vod',
   onNextEpisode,
   onPlaybackRateChange,
   onPreviousEpisode,
@@ -88,8 +110,19 @@ export function PlayerChrome({
   const volume = useMediaState('volume')
   const muted = useMediaState('muted')
   const playbackRate = useMediaState('playbackRate')
+  const qualities = useMediaState('qualities')
+  const quality = useMediaState('quality')
+  const autoQuality = useMediaState('autoQuality')
+  const canSetQuality = useMediaState('canSetQuality')
   const fullscreen = useMediaState('fullscreen')
+  const canLoad = useMediaState('canLoad')
   const waiting = useMediaState('waiting')
+  const seeking = useMediaState('seeking')
+  const canPlay = useMediaState('canPlay')
+  const started = useMediaState('started')
+  const loadingState = { canLoad, canPlay, paused, seeking, started, waiting }
+  const isBuffering = isPlayerLoadingOverlayVisible(loadingState)
+  const loadingMessage = resolvePlayerLoadingMessage(loadingState, { variant })
   const keyHoldRef = useRef<KeyHoldState | null>(null)
   const actionHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const controlsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -97,21 +130,47 @@ export function PlayerChrome({
   const lastAudibleVolumeRef = useRef(1)
   const pointerInsidePlayerRef = useRef(false)
   const settingsOpenRef = useRef(false)
+  const canLoadRef = useRef(canLoad)
   const waitingRef = useRef(waiting)
+  const seekingRef = useRef(seeking)
+  const canPlayRef = useRef(canPlay)
+  const isBufferingRef = useRef(isBuffering)
   const [actionHint, setActionHint] = useState<ActionHint | null>(null)
   const [controlsLayerVisible, setControlsLayerVisible] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('root')
   const [volumeExpanded, setVolumeExpanded] = useState(false)
-  const [isSourceOpen, setIsSourceOpen] = useState(false)
+  const [isStatsOpen, setIsStatsOpen] = useState(false)
   const [isErrorLogOpen, setIsErrorLogOpen] = useState(false)
   const [seekStepSeconds, setSeekStepSeconds] = useState(() => readStoredSeekStep())
+  const stats = usePlayerStats({ hlsSessionStats, playerRef, src })
+  const previousLabel = navigationLabels?.previous ?? '上一集'
+  const nextLabel = navigationLabels?.next ?? '下一集'
+  const showTheaterMode = controls.theaterMode && Boolean(onToggleTheaterMode)
+  const showQualityControl = controls.quality && canSetQuality && qualities.length > 1
+  const showSettingsButton = controls.settings || showQualityControl
 
-  const controlsAreVisible = controlsLayerVisible || settingsOpen || volumeExpanded
+  const controlsAreVisible = controlsLayerVisible || settingsOpen || volumeExpanded || isStatsOpen
 
   useEffect(() => {
     waitingRef.current = waiting
   }, [waiting])
+
+  useEffect(() => {
+    canLoadRef.current = canLoad
+  }, [canLoad])
+
+  useEffect(() => {
+    seekingRef.current = seeking
+  }, [seeking])
+
+  useEffect(() => {
+    canPlayRef.current = canPlay
+  }, [canPlay])
+
+  useEffect(() => {
+    isBufferingRef.current = isBuffering
+  }, [isBuffering])
 
   useEffect(() => {
     settingsOpenRef.current = settingsOpen
@@ -136,6 +195,7 @@ export function PlayerChrome({
     setSettingsOpen(false)
     setSettingsPage('root')
     setVolumeExpanded(false)
+    setIsStatsOpen(false)
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
@@ -256,6 +316,26 @@ export function PlayerChrome({
     [onPlaybackRateChange, playerRef],
   )
 
+  const applyQualitySelection = useCallback(
+    (selection: 'auto' | VideoQuality): void => {
+      const player = playerRef.current
+      if (!player) {
+        return
+      }
+
+      if (selection === 'auto') {
+        player.remoteControl.changeQuality(-1)
+        return
+      }
+
+      const index = qualities.findIndex((item) => item.id === selection.id)
+      if (index >= 0) {
+        player.remoteControl.changeQuality(index)
+      }
+    },
+    [playerRef, qualities],
+  )
+
   const toggleMuted = useCallback((): void => {
     const player = playerRef.current
     if (!player) {
@@ -317,8 +397,55 @@ export function PlayerChrome({
     keyHoldRef.current = null
   }, [])
 
+  const isPlaybackKeyboardBlocked = useCallback((): boolean => {
+    if (seekingRef.current) {
+      return true
+    }
+
+    const player = playerRef.current
+    if (!player) {
+      return false
+    }
+
+    if (player.paused) {
+      return isBufferingRef.current
+    }
+
+    return waitingRef.current
+  }, [playerRef])
+
+  const canTogglePlayFromKeyboard = useCallback((): boolean => {
+    const player = playerRef.current
+    if (!player || isPlaybackKeyboardBlocked()) {
+      return false
+    }
+
+    if (player.paused && !canPlayRef.current) {
+      return false
+    }
+
+    return true
+  }, [isPlaybackKeyboardBlocked, playerRef])
+
+  useEffect(() => {
+    if (!isBuffering && !seeking) {
+      return
+    }
+
+    clearKeyHold()
+    setActionHint(null)
+    if (actionHintTimerRef.current) {
+      clearTimeout(actionHintTimerRef.current)
+      actionHintTimerRef.current = null
+    }
+  }, [isBuffering, seeking, clearKeyHold])
+
   const handleArrowKeyDown = useCallback(
     (key: string): void => {
+      if (isPlaybackKeyboardBlocked()) {
+        return
+      }
+
       if (keyHoldRef.current?.key === key) {
         return
       }
@@ -329,7 +456,7 @@ export function PlayerChrome({
       hold.timer = setTimeout(() => {
         if (keyHoldRef.current !== hold) return
         hold.isLongPress = true
-        if (waitingRef.current) return
+        if (isPlaybackKeyboardBlocked()) return
 
         if (key !== 'ArrowUp' && key !== 'ArrowDown') {
           return
@@ -341,7 +468,7 @@ export function PlayerChrome({
         }, LONG_VOLUME_INTERVAL_MS)
       }, LONG_PRESS_MS)
     },
-    [applyVolume, clearKeyHold, playerRef],
+    [applyVolume, clearKeyHold, isPlaybackKeyboardBlocked, playerRef],
   )
 
   const handleArrowKeyUp = useCallback(
@@ -351,15 +478,17 @@ export function PlayerChrome({
       if (hold.timer) clearTimeout(hold.timer)
       if (hold.interval) clearInterval(hold.interval)
 
-      if (!hold.isLongPress && key === 'ArrowUp') {
-        applyVolume(playerRef.current?.volume ?? volume, 'up')
-      } else if (!hold.isLongPress && key === 'ArrowDown') {
-        applyVolume(playerRef.current?.volume ?? volume, 'down')
+      if (!hold.isLongPress && !isPlaybackKeyboardBlocked()) {
+        if (key === 'ArrowUp') {
+          applyVolume(playerRef.current?.volume ?? volume, 'up')
+        } else if (key === 'ArrowDown') {
+          applyVolume(playerRef.current?.volume ?? volume, 'down')
+        }
       }
 
       keyHoldRef.current = null
     },
-    [applyVolume, playerRef, volume],
+    [applyVolume, isPlaybackKeyboardBlocked, playerRef, volume],
   )
 
   useEffect(() => {
@@ -367,6 +496,8 @@ export function PlayerChrome({
       if (isEditableTarget(event.target)) return
       if (event.key === ' ') {
         event.preventDefault()
+        if (event.repeat) return
+        if (!canTogglePlayFromKeyboard()) return
         togglePlay(true)
         return
       }
@@ -374,9 +505,13 @@ export function PlayerChrome({
         event.preventDefault()
         if (event.repeat) return
         if (event.key === 'ArrowLeft') {
-          seekBy(-seekStepSeconds, true)
+          if (controls.keyboardSeek && !isPlaybackKeyboardBlocked()) {
+            seekBy(-seekStepSeconds, true)
+          }
         } else if (event.key === 'ArrowRight') {
-          seekBy(seekStepSeconds, true)
+          if (controls.keyboardSeek && !isPlaybackKeyboardBlocked()) {
+            seekBy(seekStepSeconds, true)
+          }
         } else {
           handleArrowKeyDown(event.key)
         }
@@ -394,7 +529,16 @@ export function PlayerChrome({
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [handleArrowKeyDown, handleArrowKeyUp, seekBy, seekStepSeconds, togglePlay])
+  }, [
+    canTogglePlayFromKeyboard,
+    controls.keyboardSeek,
+    handleArrowKeyDown,
+    handleArrowKeyUp,
+    isPlaybackKeyboardBlocked,
+    seekBy,
+    seekStepSeconds,
+    togglePlay,
+  ])
 
   useEffect(() => {
     return () => clearKeyHold()
@@ -402,19 +546,28 @@ export function PlayerChrome({
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setIsSourceOpen(false)
-        setIsErrorLogOpen(false)
-        if (settingsPage !== 'root') {
-          setSettingsPage('root')
-        } else {
-          setSettingsOpen(false)
-        }
+      if (event.key !== 'Escape') {
+        return
       }
+
+      const hasOpenPanel = isStatsOpen || isErrorLogOpen || settingsOpen || settingsPage !== 'root'
+      if (!hasOpenPanel) {
+        return
+      }
+
+      setIsStatsOpen(false)
+      setIsErrorLogOpen(false)
+      if (settingsPage !== 'root') {
+        setSettingsPage('root')
+      } else {
+        setSettingsOpen(false)
+      }
+      event.stopImmediatePropagation()
     }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [settingsPage])
+
+    window.addEventListener('keydown', closeOnEscape, true)
+    return () => window.removeEventListener('keydown', closeOnEscape, true)
+  }, [isErrorLogOpen, isStatsOpen, settingsOpen, settingsPage])
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -481,11 +634,11 @@ export function PlayerChrome({
         }}
       />
 
-      {waiting ? (
-        <div className="pointer-events-none absolute inset-0 z-15 flex items-center justify-center bg-black/30">
+      {isBuffering ? (
+        <div className="pointer-events-none absolute inset-0 z-25 flex items-center justify-center bg-black/45">
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="text-primary animate-spin" size={36} />
-            <span className="text-sm font-medium text-white/85">加载中</span>
+            <Loader2 className="animate-spin text-white" size={36} />
+            <span className="text-sm font-medium text-white/85">{loadingMessage}</span>
           </div>
         </div>
       ) : null}
@@ -506,36 +659,55 @@ export function PlayerChrome({
             <div className="min-w-0 flex-1" />
           )}
           <div className="flex shrink-0 items-center gap-2">
+            {errorLogs.length > 0 ? (
+              <PlayerTopButton
+                label={`查看错误日志（${errorLogs.length}）`}
+                tone="warning"
+                onClick={() => setIsErrorLogOpen(true)}
+              >
+                <TriangleAlert size={18} />
+              </PlayerTopButton>
+            ) : null}
+            <PlayerTopButton
+              aria-pressed={isStatsOpen}
+              label="统计信息"
+              onClick={() => {
+                setIsStatsOpen((current) => !current)
+                setSettingsOpen(false)
+                setSettingsPage('root')
+                setVolumeExpanded(false)
+                setControlsLayerVisible(true)
+                scheduleControlsHide(true)
+              }}
+            >
+              <BarChart3 size={18} />
+            </PlayerTopButton>
             <PlayerTopButton label="刷新重试" onClick={onRetry}>
               <RefreshCw size={18} />
-            </PlayerTopButton>
-            <PlayerTopButton
-              label={`查看错误日志${errorLogs.length > 0 ? `（${errorLogs.length}）` : ''}`}
-              tone={errorLogs.length > 0 ? 'warning' : 'default'}
-              onClick={() => setIsErrorLogOpen(true)}
-            >
-              <TriangleAlert size={18} />
-            </PlayerTopButton>
-            <PlayerTopButton label="查看播放地址" onClick={() => setIsSourceOpen(true)}>
-              <Info size={18} />
             </PlayerTopButton>
           </div>
         </Controls.Group>
 
         <Controls.Group
           className={cn(
-            'absolute inset-x-0 bottom-0 h-20 px-4 py-2 transition-opacity duration-150',
+            'absolute inset-x-0 bottom-0 px-4 py-2 transition-opacity duration-150',
+            controls.progress ? 'h-20' : 'h-16',
             isTheaterMode ? 'bg-linear-to-t from-black/85 via-black/55 to-transparent' : 'bg-black',
             controlsAreVisible ? 'pointer-events-auto opacity-100' : 'opacity-0',
           )}
         >
-          <PlayerTimeSlider />
+          {controls.progress ? <PlayerTimeSlider /> : null}
 
-          <div className="-mx-3.5 mt-1.5 -mb-2.5 flex items-center justify-between gap-4 px-3.5 pb-2.5">
+          <div
+            className={cn(
+              '-mx-3.5 -mb-2.5 flex items-center justify-between gap-4 px-3.5 pb-2.5',
+              controls.progress ? 'mt-1.5' : 'mt-0',
+            )}
+          >
             <div className="flex min-w-0 items-center gap-1">
-              <PlayerControlTooltip label="上一集">
+              <PlayerControlTooltip label={previousLabel}>
                 <PlayerIconButton
-                  aria-label="上一集"
+                  aria-label={previousLabel}
                   disabled={!hasPreviousEpisode}
                   onClick={() => onPreviousEpisode?.()}
                 >
@@ -554,8 +726,8 @@ export function PlayerChrome({
                 )}
               </PlayButton>
 
-              <PlayerControlTooltip label="下一集">
-                <PlayerIconButton aria-label="下一集" disabled={!hasNextEpisode} onClick={() => onNextEpisode?.()}>
+              <PlayerControlTooltip label={nextLabel}>
+                <PlayerIconButton aria-label={nextLabel} disabled={!hasNextEpisode} onClick={() => onNextEpisode?.()}>
                   <SkipForward fill="currentColor" size={20} />
                 </PlayerIconButton>
               </PlayerControlTooltip>
@@ -575,51 +747,64 @@ export function PlayerChrome({
                 }}
               />
 
-              <div className="px-2.5 py-2 text-[13px] leading-none font-medium whitespace-nowrap text-white/88 tabular-nums">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
+              {controls.time ? (
+                <div className="px-2.5 py-2 text-[13px] leading-none font-medium whitespace-nowrap text-white/88 tabular-nums">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+              ) : null}
             </div>
 
             <div ref={controlActionsRef} className="relative flex shrink-0 items-center gap-2">
-              <PlayerControlTooltip label="设置">
-                <PlayerIconButton
-                  aria-expanded={settingsOpen}
-                  aria-label="设置"
-                  data-player-settings-trigger="true"
-                  onClick={() => {
-                    const nextSettingsOpen = !settingsOpen
-                    setSettingsOpen(nextSettingsOpen)
-                    setSettingsPage('root')
-                    setVolumeExpanded(false)
-                    setControlsLayerVisible(true)
-                    if (nextSettingsOpen) {
-                      clearControlsHideTimer()
-                    } else {
-                      scheduleControlsHide(true)
-                    }
-                  }}
-                >
-                  <Settings size={19} />
-                </PlayerIconButton>
-              </PlayerControlTooltip>
-              <PlayerControlTooltip label="影院模式">
-                <PlayerIconButton aria-label="影院模式" onClick={handleTheaterModeClick}>
-                  <TheaterModeIcon active={isTheaterMode} />
-                </PlayerIconButton>
-              </PlayerControlTooltip>
+              {showSettingsButton ? (
+                <PlayerControlTooltip label="设置">
+                  <PlayerIconButton
+                    aria-expanded={settingsOpen}
+                    aria-label="设置"
+                    data-player-settings-trigger="true"
+                    onClick={() => {
+                      const nextSettingsOpen = !settingsOpen
+                      setSettingsOpen(nextSettingsOpen)
+                      setSettingsPage('root')
+                      setVolumeExpanded(false)
+                      setIsStatsOpen(false)
+                      setControlsLayerVisible(true)
+                      if (nextSettingsOpen) {
+                        clearControlsHideTimer()
+                      } else {
+                        scheduleControlsHide(true)
+                      }
+                    }}
+                  >
+                    <Settings size={19} />
+                  </PlayerIconButton>
+                </PlayerControlTooltip>
+              ) : null}
+              {showTheaterMode ? (
+                <PlayerControlTooltip label="影院模式">
+                  <PlayerIconButton aria-label="影院模式" onClick={handleTheaterModeClick}>
+                    <TheaterModeIcon active={isTheaterMode} />
+                  </PlayerIconButton>
+                </PlayerControlTooltip>
+              ) : null}
               <PlayerControlTooltip label="全屏">
                 <FullscreenButton aria-label="全屏" className={playerButtonClass} onClick={handleFullscreenClick}>
                   <FullscreenModeIcon active={fullscreen} />
                 </FullscreenButton>
               </PlayerControlTooltip>
 
-              {settingsOpen ? (
+              {settingsOpen && showSettingsButton ? (
                 <PlayerSettingsPanel
+                  autoQuality={autoQuality}
+                  controls={controls}
                   page={settingsPage}
                   playbackRate={playbackRate}
                   playlistFilteringEnabled={playlistFilteringEnabled}
+                  qualities={qualities}
+                  quality={quality}
                   seekStepSeconds={seekStepSeconds}
+                  showQualityControl={showQualityControl}
                   onApplyPlaybackRate={applyPlaybackRate}
+                  onApplyQualitySelection={applyQualitySelection}
                   onApplySeekStep={applySeekStep}
                   onPageChange={setSettingsPage}
                   onTogglePlaylistFiltering={onTogglePlaylistFiltering}
@@ -632,7 +817,7 @@ export function PlayerChrome({
 
       <ActionFeedbackOverlay hint={actionHint} />
 
-      {isSourceOpen ? <PlaySourceDialog src={src} onClose={() => setIsSourceOpen(false)} /> : null}
+      <PlayerStatsOverlay open={isStatsOpen} stats={stats} onClose={() => setIsStatsOpen(false)} />
       {isErrorLogOpen ? <PlayerErrorLogDialog logs={errorLogs} onClose={() => setIsErrorLogOpen(false)} /> : null}
     </div>
   )
@@ -646,9 +831,9 @@ function PlayerTimeSlider(): React.JSX.Element {
     >
       <TimeSlider.Track className="relative h-1 w-full overflow-hidden rounded-full bg-white/28 transition-[height] duration-100 group-hover/time:h-1.5 group-data-dragging/time:h-1.5">
         <TimeSlider.Progress className="absolute inset-y-0 left-0 w-(--slider-progress) rounded-full bg-white/45" />
-        <TimeSlider.TrackFill className="bg-primary absolute inset-y-0 left-0 w-(--slider-fill) rounded-full" />
+        <TimeSlider.TrackFill className="absolute inset-y-0 left-0 w-(--slider-fill) rounded-full bg-white" />
       </TimeSlider.Track>
-      <TimeSlider.Thumb className="bg-primary absolute left-(--slider-fill) size-3 -translate-x-1/2 rounded-full opacity-0 shadow-sm transition-[opacity,transform] duration-100 group-hover/time:scale-125 group-hover/time:opacity-100 group-data-dragging/time:scale-125 group-data-dragging/time:opacity-100" />
+      <TimeSlider.Thumb className="absolute left-(--slider-fill) size-3 -translate-x-1/2 rounded-full bg-white opacity-0 shadow-sm transition-[opacity,transform] duration-100 group-hover/time:scale-125 group-hover/time:opacity-100 group-data-dragging/time:scale-125 group-data-dragging/time:opacity-100" />
     </TimeSlider.Root>
   )
 }
@@ -720,24 +905,48 @@ function PlayerVolumeControl({
 }
 
 function PlayerSettingsPanel({
+  autoQuality,
+  controls,
   page,
   playbackRate,
   playlistFilteringEnabled,
+  qualities,
+  quality,
   seekStepSeconds,
+  showQualityControl,
   onApplyPlaybackRate,
+  onApplyQualitySelection,
   onApplySeekStep,
   onPageChange,
   onTogglePlaylistFiltering,
 }: {
+  autoQuality: boolean
+  controls: PlayerControlsConfig
   page: SettingsPage
   playbackRate: number
   playlistFilteringEnabled: boolean
+  qualities: VideoQuality[]
+  quality: VideoQuality | null
   seekStepSeconds: number
+  showQualityControl: boolean
   onApplyPlaybackRate: (rate: number) => void
+  onApplyQualitySelection: (selection: 'auto' | VideoQuality) => void
   onApplySeekStep: (seconds: number) => void
   onPageChange: (page: SettingsPage) => void
   onTogglePlaylistFiltering: () => void
 }): React.JSX.Element {
+  if (page === 'quality') {
+    return (
+      <QualityDetailPanel
+        autoQuality={autoQuality}
+        qualities={qualities}
+        quality={quality}
+        onBack={() => onPageChange('root')}
+        onSelect={onApplyQualitySelection}
+      />
+    )
+  }
+
   if (page === 'speed') {
     return (
       <SettingsDetailPanel
@@ -777,25 +986,135 @@ function PlayerSettingsPanel({
       data-player-settings-panel="true"
       role="dialog"
     >
-      <SettingsRow
-        icon={<TimerReset size={24} />}
-        label="快进步长"
-        value={`${seekStepSeconds} 秒`}
-        onClick={() => onPageChange('seek')}
-      />
-      <SettingsRow
-        icon={<Gauge size={24} />}
-        label="播放倍速"
-        value={formatRate(playbackRate)}
-        onClick={() => onPageChange('speed')}
-      />
-      <SettingsToggleRow
-        enabled={playlistFilteringEnabled}
-        icon={<ShieldCheck size={24} />}
-        label="去广告（实验性）"
-        onToggle={onTogglePlaylistFiltering}
-      />
+      {showQualityControl ? (
+        <SettingsRow
+          icon={<Monitor size={24} />}
+          label="清晰度"
+          value={formatQualitySummary(autoQuality, quality)}
+          onClick={() => onPageChange('quality')}
+        />
+      ) : null}
+      {controls.settings ? (
+        <>
+          <SettingsRow
+            icon={<TimerReset size={24} />}
+            label="快进步长"
+            value={`${seekStepSeconds} 秒`}
+            onClick={() => onPageChange('seek')}
+          />
+          <SettingsRow
+            icon={<Gauge size={24} />}
+            label="播放倍速"
+            value={formatRate(playbackRate)}
+            onClick={() => onPageChange('speed')}
+          />
+          {controls.adBlock ? (
+            <SettingsToggleRow
+              enabled={playlistFilteringEnabled}
+              icon={<ShieldCheck size={24} />}
+              label="去广告（实验性）"
+              onToggle={onTogglePlaylistFiltering}
+            />
+          ) : null}
+        </>
+      ) : null}
     </div>
+  )
+}
+
+function QualityDetailPanel({
+  autoQuality,
+  qualities,
+  quality,
+  onBack,
+  onSelect,
+}: {
+  autoQuality: boolean
+  qualities: VideoQuality[]
+  quality: VideoQuality | null
+  onBack: () => void
+  onSelect: (selection: 'auto' | VideoQuality) => void
+}): React.JSX.Element {
+  const sortedQualities = [...qualities].sort((left, right) => {
+    if (right.height !== left.height) {
+      return right.height - left.height
+    }
+
+    return right.width - left.width
+  })
+
+  return (
+    <div
+      aria-label="清晰度"
+      className="absolute right-0 bottom-full z-30 mb-3 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/10 bg-black/86 text-white shadow-2xl shadow-black/45 backdrop-blur-2xl"
+      data-player-settings-panel="true"
+      role="dialog"
+    >
+      <button
+        className="flex w-full items-center gap-3 border-b border-white/10 px-4 py-4 text-left text-base font-semibold text-white/95 transition-colors hover:bg-white/8 focus:outline-none"
+        type="button"
+        onClick={(event) => {
+          onBack()
+          event.currentTarget.blur()
+        }}
+      >
+        <ChevronLeft size={24} />
+        清晰度
+      </button>
+
+      <div className="flex max-h-80 flex-col gap-1 overflow-y-auto p-2">
+        <QualityOptionButton
+          active={autoQuality}
+          description="根据网络自动选择"
+          label="自动"
+          onClick={() => onSelect('auto')}
+        />
+        {sortedQualities.map((item) => (
+          <QualityOptionButton
+            key={item.id}
+            active={!autoQuality && quality?.id === item.id}
+            description={formatQualityDescription(item)}
+            label={formatQualityOptionLabel(item)}
+            onClick={() => onSelect(item)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function QualityOptionButton({
+  active,
+  description,
+  label,
+  onClick,
+}: {
+  active: boolean
+  description?: string
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      className={cn(
+        'flex w-full items-center rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/9 focus:outline-none',
+        active && 'bg-white text-black hover:bg-white hover:text-black',
+      )}
+      type="button"
+      onClick={(event) => {
+        onClick()
+        event.currentTarget.blur()
+      }}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-base leading-6 font-medium">{label}</span>
+        {description ? (
+          <span className={cn('block text-xs leading-5', active ? 'text-black/65' : 'text-white/55')}>
+            {description}
+          </span>
+        ) : null}
+      </span>
+    </button>
   )
 }
 
@@ -825,12 +1144,12 @@ function SettingsToggleRow({
       <span className="mr-2 text-sm whitespace-nowrap text-white/64">{enabled ? '已开启' : '已关闭'}</span>
       <span
         aria-hidden="true"
-        className={cn('relative h-5 w-9 rounded-full bg-white/24 transition-colors', enabled && 'bg-primary')}
+        className={cn('relative h-5 w-9 rounded-full bg-white/24 transition-colors', enabled && 'bg-white/88')}
       >
         <span
           className={cn(
-            'absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform',
-            enabled && 'translate-x-4',
+            'absolute top-0.5 left-0.5 size-4 rounded-full shadow-sm transition-transform',
+            enabled ? 'translate-x-4 bg-black' : 'bg-white',
           )}
         />
       </span>
@@ -891,7 +1210,7 @@ function SettingsDetailPanel({
           </SettingsAdjustButton>
           <input
             aria-label={label}
-            className="accent-primary h-1 min-w-0 flex-1 cursor-pointer"
+            className="h-1 min-w-0 flex-1 cursor-pointer accent-white"
             max={max}
             min={min}
             step={step}
@@ -1005,22 +1324,24 @@ function PlayerTopButton({
   label,
   onClick,
   tone = 'default',
+  ...props
 }: {
   children: React.ReactNode
   label: string
   onClick: () => void
   tone?: 'default' | 'warning'
-}): React.JSX.Element {
+} & React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
   return (
     <button
       aria-label={label}
       className={cn(
         'inline-flex size-10 items-center justify-center rounded-full text-white/92 transition-colors hover:bg-white/14 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none',
-        tone === 'warning' && 'text-destructive',
+        tone === 'warning' && 'text-white/95',
       )}
       title={label}
       type="button"
       onClick={onClick}
+      {...props}
     >
       {children}
     </button>
@@ -1145,6 +1466,41 @@ function formatTime(seconds: number): string {
 
 function formatRate(rate: number): string {
   return `${rate.toFixed(2)}x`
+}
+
+function formatQualitySummary(autoQuality: boolean, quality: VideoQuality | null): string {
+  if (autoQuality || !quality) {
+    return '自动'
+  }
+
+  return formatQualityOptionLabel(quality)
+}
+
+function formatQualityOptionLabel(quality: VideoQuality): string {
+  if (quality.height > 0) {
+    return `${quality.height}P`
+  }
+
+  if (quality.width > 0) {
+    return `${quality.width}×${quality.height}`
+  }
+
+  return quality.id
+}
+
+function formatQualityDescription(quality: VideoQuality): string {
+  const parts: string[] = []
+
+  if (quality.width > 0 && quality.height > 0) {
+    parts.push(`${quality.width}×${quality.height}`)
+  }
+
+  const bitrate = formatBitrate(quality.bitrate)
+  if (bitrate !== '—') {
+    parts.push(bitrate)
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : '—'
 }
 
 function getPointerVolumePercent(element: HTMLElement, clientX: number): number {

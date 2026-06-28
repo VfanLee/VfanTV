@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MediaPlayer,
   MediaProvider,
@@ -7,16 +7,29 @@ import {
   type MediaPlayerInstance,
   type PlayerSrc,
 } from '@vidstack/react'
+import Hls from 'hls.js'
 import { cn } from '@renderer/lib/utils'
 import { createFilteredHlsLoader } from '@renderer/lib/hls-playlist-filter'
 import { PlayerChrome } from './player/PlayerChrome'
-import type { PlayerErrorLog } from './player/types'
+import {
+  PLAYER_CONTROLS_PRESETS,
+  type HlsSessionStats,
+  type PlayerErrorLog,
+  type PlayerNavigationLabels,
+  type PlayerVariant,
+} from './player/types'
 
 const MAX_ERROR_LOGS = 100
 const HLS_MIME_TYPE = 'application/x-mpegurl' as const
 const HLS_PLAYLIST_FILTER_STORAGE_KEY = 'enable_blockad'
 const PLAYER_VOLUME_STORAGE_KEY = 'vfan-player-volume'
 const DEFAULT_PLAYER_VOLUME = 0.8
+const EMPTY_HLS_SESSION_STATS: HlsSessionStats = {
+  audioCodec: null,
+  autoLevelEnabled: true,
+  bandwidthEstimate: null,
+  networkBytesLoaded: 0,
+}
 
 export interface BasicPlayerProps {
   autoPlay?: boolean
@@ -29,11 +42,13 @@ export interface BasicPlayerProps {
   hasPreviousEpisode?: boolean
   isTheaterMode?: boolean
   loop?: boolean
+  navigationLabels?: PlayerNavigationLabels
   onNextEpisode?: () => void
   onEnded?: () => void
   onPreviousEpisode?: () => void
   onProgress?: (progress: { currentTime: number; duration: number }) => void
   onToggleTheaterMode?: () => void
+  variant?: PlayerVariant
 }
 
 export function BasicPlayer({
@@ -44,6 +59,7 @@ export function BasicPlayer({
   initialTime = 0,
   isTheaterMode = false,
   loop = false,
+  navigationLabels,
   onNextEpisode,
   onEnded,
   onPreviousEpisode,
@@ -52,14 +68,19 @@ export function BasicPlayer({
   src,
   sourceType,
   title,
+  variant = 'vod',
 }: BasicPlayerProps): React.JSX.Element {
   const playerRef = useRef<MediaPlayerInstance | null>(null)
   const errorLogIdRef = useRef(0)
   const retryTimeRef = useRef(0)
   const resumeAfterReloadRef = useRef(false)
   const appliedLoadKeyRef = useRef('')
+  const hlsDisposeRef = useRef<(() => void) | null>(null)
+  const networkBytesRef = useRef(0)
   const [reloadNonce, setReloadNonce] = useState(0)
+  const controls = PLAYER_CONTROLS_PRESETS[variant]
   const [playlistFilteringEnabled, setPlaylistFilteringEnabled] = useState(() => readPlaylistFilteringEnabled())
+  const [hlsSessionStats, setHlsSessionStats] = useState<HlsSessionStats>(EMPTY_HLS_SESSION_STATS)
   const [playbackSettings, setPlaybackSettings] = useState(() => ({
     playbackRate: 1,
     volume: readStoredPlayerVolume(),
@@ -72,6 +93,21 @@ export function BasicPlayer({
   const playerSrc = useMemo<PlayerSrc | undefined>(() => getPlayerSource(src, sourceType), [sourceType, src])
   const errorLogs = errorState.src === src ? errorState.logs : []
   const loadKey = `${src ?? ''}:${reloadNonce}`
+  const adBlockEnabled = controls.adBlock && playlistFilteringEnabled
+
+  useEffect(() => {
+    networkBytesRef.current = 0
+    setHlsSessionStats(EMPTY_HLS_SESSION_STATS)
+    hlsDisposeRef.current?.()
+    hlsDisposeRef.current = null
+  }, [loadKey])
+
+  useEffect(() => {
+    return () => {
+      hlsDisposeRef.current?.()
+      hlsDisposeRef.current = null
+    }
+  }, [])
 
   const appendErrorLog = useCallback(
     (source: PlayerErrorLog['source'], message: string, fatal: boolean): void => {
@@ -99,6 +135,10 @@ export function BasicPlayer({
   }
 
   const togglePlaylistFiltering = useCallback((): void => {
+    if (!controls.adBlock) {
+      return
+    }
+
     const nextEnabled = !playlistFilteringEnabled
     window.localStorage.setItem(HLS_PLAYLIST_FILTER_STORAGE_KEY, String(nextEnabled))
 
@@ -110,10 +150,20 @@ export function BasicPlayer({
     }
 
     setPlaylistFilteringEnabled(nextEnabled)
-  }, [playlistFilteringEnabled, src])
+  }, [controls.adBlock, playlistFilteringEnabled, src])
 
   const handlePlaybackRateChange = useCallback((playbackRate: number): void => {
     setPlaybackSettings((current) => ({ ...current, playbackRate }))
+  }, [])
+
+  const syncHlsSessionStats = useCallback((hls: Hls): void => {
+    const audioTrack = hls.audioTracks?.[hls.audioTrack]
+    setHlsSessionStats({
+      audioCodec: audioTrack?.audioCodec ?? null,
+      autoLevelEnabled: hls.autoLevelEnabled,
+      bandwidthEstimate: hls.bandwidthEstimate ?? null,
+      networkBytesLoaded: networkBytesRef.current,
+    })
   }, [])
 
   const applyStartTime = (duration: number): void => {
@@ -151,16 +201,18 @@ export function BasicPlayer({
     )
   }
 
+  const chromePaddingClass = isTheaterMode ? 'h-full' : controls.progress ? 'pt-14 pb-20' : 'pt-14 pb-16'
+
   if (!src || !playerSrc) {
     return (
       <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
-        <div aria-hidden="true" className={cn('pointer-events-none w-full', isTheaterMode ? 'h-full' : 'pt-14 pb-20')}>
+        <div aria-hidden="true" className={cn('pointer-events-none w-full', chromePaddingClass)}>
           <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
         </div>
         <div
           className={cn(
-            'text-muted-foreground absolute inset-x-0 flex items-center justify-center text-sm',
-            isTheaterMode ? 'inset-y-0' : 'top-14 bottom-20',
+            'absolute inset-x-0 flex items-center justify-center text-sm text-white/55',
+            isTheaterMode ? 'inset-y-0' : controls.progress ? 'top-14 bottom-20' : 'top-14 bottom-16',
           )}
         >
           请选择一个可播放剧集
@@ -200,10 +252,13 @@ export function BasicPlayer({
         appendErrorLog('HLS', message, detail.fatal)
       }}
       onProviderChange={(provider) => {
+        hlsDisposeRef.current?.()
+        hlsDisposeRef.current = null
+
         if (isHLSProvider(provider)) {
           provider.library = async () => {
             const hlsLibrary = await import('hls.js')
-            if (playlistFilteringEnabled) {
+            if (adBlockEnabled) {
               provider.config = {
                 ...provider.config,
                 loader: createFilteredHlsLoader(hlsLibrary.default),
@@ -211,6 +266,25 @@ export function BasicPlayer({
             }
             return hlsLibrary
           }
+
+          hlsDisposeRef.current = provider.onInstance((hls) => {
+            const onFragLoaded = (_event: string, data: { frag?: { stats?: { total?: number } } }): void => {
+              networkBytesRef.current += data.frag?.stats?.total ?? 0
+              syncHlsSessionStats(hls)
+            }
+            const onLevelSwitched = (): void => {
+              syncHlsSessionStats(hls)
+            }
+
+            hls.on(Hls.Events.FRAG_LOADED, onFragLoaded)
+            hls.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
+            syncHlsSessionStats(hls)
+
+            return () => {
+              hls.off(Hls.Events.FRAG_LOADED, onFragLoaded)
+              hls.off(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
+            }
+          })
         }
       }}
       onRateChange={(playbackRate) => {
@@ -226,24 +300,28 @@ export function BasicPlayer({
         }))
       }}
     >
-      <div aria-hidden="true" className={cn('pointer-events-none w-full', isTheaterMode ? 'h-full' : 'pt-14 pb-20')}>
+      <div aria-hidden="true" className={cn('pointer-events-none w-full', chromePaddingClass)}>
         <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
       </div>
       <MediaProvider
         className={cn(
           'pointer-events-none absolute inset-x-0 bg-black [&>video]:h-full [&>video]:w-full [&>video]:object-contain',
-          isTheaterMode ? 'inset-y-0' : 'top-14 bottom-20',
+          isTheaterMode ? 'inset-y-0' : controls.progress ? 'top-14 bottom-20' : 'top-14 bottom-16',
         )}
       />
       <PlayerChrome
+        controls={controls}
         errorLogs={errorLogs}
         hasNextEpisode={hasNextEpisode}
         hasPreviousEpisode={hasPreviousEpisode}
+        hlsSessionStats={hlsSessionStats}
         isTheaterMode={isTheaterMode}
+        navigationLabels={navigationLabels}
         playlistFilteringEnabled={playlistFilteringEnabled}
         playerRef={playerRef}
         src={src}
         title={title}
+        variant={variant}
         onNextEpisode={onNextEpisode}
         onPlaybackRateChange={handlePlaybackRateChange}
         onPreviousEpisode={onPreviousEpisode}

@@ -19,6 +19,13 @@ import {
 
 const LIVE_PLAYLIST_CACHE_PREFIX = 'vfantv-live-playlist:'
 const LIVE_SELECTED_SOURCE_STORAGE_KEY = 'vfantv-live-selected-source-id'
+const LIVE_SELECTION_STORAGE_PREFIX = 'vfantv-live-selection:'
+
+interface LiveSelectionCache {
+  channelId: string
+  streamId: string
+  expandedGroups: string[]
+}
 
 export function LivePage(): React.JSX.Element {
   const [liveSources, setLiveSources] = useState<LiveSourceConfig[]>([])
@@ -31,10 +38,15 @@ export function LivePage(): React.JSX.Element {
   const [liveProxyBaseUrl, setLiveProxyBaseUrl] = useState('')
   const [isLoadingSettings, setIsLoadingSettings] = useState(true)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
+  const [isTheaterMode, setIsTheaterMode] = useState(false)
   const selectedSource = liveSources.find((source) => source.id === selectedSourceId)
   const activeChannel = playlist?.channels.find((channel) => channel.id === activeChannelId)
   const activeStream =
     activeChannel?.streams.find((stream) => stream.id === activeStreamId) ?? activeChannel?.streams[0]
+  const activeStreamIndex = activeChannel?.streams.findIndex((stream) => stream.id === activeStreamId) ?? -1
+  const hasPreviousStream = activeStreamIndex > 0
+  const hasNextStream =
+    activeChannel != null && activeStreamIndex >= 0 && activeStreamIndex < activeChannel.streams.length - 1
   const playerSrc = resolveLivePlaybackUrl(liveProxyBaseUrl, activeStream?.url)
   const activeStreamIsLive = isLikelyHlsStream(activeStream?.url)
   const playerTitle = activeChannel?.title
@@ -42,14 +54,13 @@ export function LivePage(): React.JSX.Element {
   const channelCount = playlist?.channels.length ?? 0
   const streamCount = playlist?.channels.reduce((total, channel) => total + channel.streams.length, 0) ?? 0
 
-  const applyPlaylist = useCallback((nextPlaylist: LivePlaylist): void => {
-    const firstChannel = nextPlaylist.channels[0]
-    const firstStream = firstChannel?.streams[0]
+  const applyPlaylist = useCallback((nextPlaylist: LivePlaylist, sourceId: string): void => {
+    const selection = resolveLiveSelection(nextPlaylist, readCachedSelection(sourceId))
 
     setPlaylist(nextPlaylist)
-    setActiveChannelId(firstChannel?.id ?? '')
-    setActiveStreamId(firstStream?.id ?? '')
-    setExpandedGroups(new Set(firstChannel?.group ? [firstChannel.group] : []))
+    setActiveChannelId(selection.channelId)
+    setActiveStreamId(selection.streamId)
+    setExpandedGroups(new Set(selection.expandedGroups))
   }, [])
 
   const loadPlaylist = useCallback(
@@ -61,7 +72,7 @@ export function LivePage(): React.JSX.Element {
       if (!force) {
         const cachedPlaylist = readCachedPlaylist(selectedSource)
         if (cachedPlaylist) {
-          applyPlaylist(cachedPlaylist)
+          applyPlaylist(cachedPlaylist, selectedSource.id)
           return
         }
       }
@@ -71,7 +82,7 @@ export function LivePage(): React.JSX.Element {
         const nextPlaylist = await loadLivePlaylist(selectedSource.url)
 
         writeCachedPlaylist(selectedSource, nextPlaylist)
-        applyPlaylist(nextPlaylist)
+        applyPlaylist(nextPlaylist, selectedSource.id)
 
         if (!silent) {
           toast.success('直播源加载完成', {
@@ -126,9 +137,50 @@ export function LivePage(): React.JSX.Element {
     })
   }, [isLoadingSettings, loadPlaylist, playlist?.sourceUrl, selectedSource])
 
+  useEffect(() => {
+    if (!selectedSourceId || !activeChannelId || !playlist) {
+      return
+    }
+
+    writeCachedSelection(selectedSourceId, {
+      channelId: activeChannelId,
+      streamId: activeStreamId,
+      expandedGroups: [...expandedGroups],
+    })
+  }, [activeChannelId, activeStreamId, expandedGroups, playlist, selectedSourceId])
+
+  useEffect(() => {
+    if (!isTheaterMode) {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setIsTheaterMode(false)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isTheaterMode])
+
   const selectChannel = (channel: LiveChannel): void => {
     setActiveChannelId(channel.id)
     setActiveStreamId(channel.streams[0]?.id ?? '')
+  }
+
+  const selectStreamByOffset = (offset: -1 | 1): void => {
+    if (!activeChannel || activeStreamIndex < 0) {
+      return
+    }
+
+    const nextIndex = activeStreamIndex + offset
+    const nextStream = activeChannel.streams[nextIndex]
+    if (!nextStream) {
+      return
+    }
+
+    setActiveStreamId(nextStream.id)
   }
 
   const toggleGroup = (groupName: string): void => {
@@ -144,146 +196,174 @@ export function LivePage(): React.JSX.Element {
   }
 
   return (
-    <div className="bg-background text-foreground h-screen overflow-hidden p-4">
-      <div className="mx-auto flex h-full max-w-[1760px] flex-col gap-4">
-        <NowPlayingTitle title={playerTitle} />
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="min-h-0">
-            <div className="border-border bg-card h-full min-h-0 overflow-hidden rounded-xl border">
+    <div
+      className={cn(
+        isTheaterMode
+          ? 'fixed inset-0 z-50 flex flex-col bg-black'
+          : 'bg-background text-foreground h-screen overflow-hidden p-4',
+      )}
+    >
+      <div
+        className={cn(
+          isTheaterMode
+            ? 'flex min-h-0 flex-1 items-center justify-center'
+            : 'mx-auto flex h-full max-w-[1760px] flex-col gap-4',
+        )}
+      >
+        {!isTheaterMode ? <NowPlayingTitle title={playerTitle} /> : null}
+        <div
+          className={cn(
+            isTheaterMode
+              ? 'aspect-video w-full max-w-[calc(100vh*16/9)]'
+              : 'grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]',
+          )}
+        >
+          <section className={cn(isTheaterMode ? 'h-full w-full' : 'min-h-0')}>
+            <div className={cn('h-full min-h-0 overflow-hidden bg-black', !isTheaterMode && 'rounded-xl')}>
               <BasicPlayer
                 autoPlay
-                className="h-full"
+                className={isTheaterMode ? undefined : 'h-full'}
+                hasNextEpisode={hasNextStream}
+                hasPreviousEpisode={hasPreviousStream}
+                isTheaterMode={isTheaterMode}
                 loop={!activeStreamIsLive}
-                src={playerSrc}
+                navigationLabels={{ next: '下一线路', previous: '上一线路' }}
                 sourceType={activeStreamIsLive ? 'hls' : undefined}
+                src={playerSrc}
                 title={playerTitle}
+                variant="live"
+                onNextEpisode={() => selectStreamByOffset(1)}
+                onPreviousEpisode={() => selectStreamByOffset(-1)}
+                onToggleTheaterMode={() => setIsTheaterMode((current) => !current)}
               />
             </div>
           </section>
 
-          <aside className="flex min-h-0 flex-col gap-4">
-            <div className="border-border bg-card rounded-xl border px-4 py-4">
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <Select
-                    disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
-                    value={selectedSourceId || undefined}
-                    onValueChange={(sourceId) => {
-                      setSelectedSourceId(sourceId)
-                      window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, sourceId)
-                      setPlaylist(undefined)
-                      setActiveChannelId('')
-                      setActiveStreamId('')
-                    }}
+          {!isTheaterMode ? (
+            <aside className="flex min-h-0 flex-col gap-4">
+              <div className="border-border bg-card rounded-xl border px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Select
+                      disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
+                      value={selectedSourceId || undefined}
+                      onValueChange={(sourceId) => {
+                        setSelectedSourceId(sourceId)
+                        window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, sourceId)
+                        setPlaylist(undefined)
+                        setActiveChannelId('')
+                        setActiveStreamId('')
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="暂无直播源" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" align="start">
+                        <SelectGroup>
+                          {liveSources.map((source) => (
+                            <SelectItem key={source.id} value={source.id}>
+                              {source.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    disabled={!selectedSource || isLoadingPlaylist}
+                    onClick={() => void loadPlaylist({ force: true })}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="暂无直播源" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" align="start">
-                      <SelectGroup>
-                        {liveSources.map((source) => (
-                          <SelectItem key={source.id} value={source.id}>
-                            {source.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                    {isLoadingPlaylist ? <RefreshCw className="animate-spin" size={16} /> : <Radio size={16} />}
+                    {isLoadingPlaylist ? '加载中' : '加载'}
+                  </Button>
                 </div>
-                <Button
-                  disabled={!selectedSource || isLoadingPlaylist}
-                  onClick={() => void loadPlaylist({ force: true })}
-                >
-                  {isLoadingPlaylist ? <RefreshCw className="animate-spin" size={16} /> : <Radio size={16} />}
-                  {isLoadingPlaylist ? '加载中' : '加载'}
-                </Button>
-              </div>
-              <div className="text-muted-foreground mt-3 text-sm">
-                {channelCount} 个频道 · {streamCount} 条线路
-              </div>
-            </div>
-
-            <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-              <div className="border-border border-b p-4">
-                <div className="border-input bg-background flex h-10 items-center gap-2 rounded-xl border px-3">
-                  <Search className="text-muted-foreground shrink-0" size={17} />
-                  <Input
-                    className="h-full border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                    placeholder="搜索频道"
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                  />
+                <div className="text-muted-foreground mt-3 text-sm">
+                  {channelCount} 个频道 · {streamCount} 条线路
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-auto">
-                {groupedChannels.length > 0 ? (
-                  <div className="flex flex-col p-4">
-                    {groupedChannels.map((group) => (
-                      <section key={group.name} className="border-border border-b last:border-b-0">
-                        <button
-                          aria-expanded={expandedGroups.has(group.name)}
-                          className="hover:bg-muted/70 focus-visible:ring-ring flex h-12 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors outline-none focus-visible:ring-2"
-                          type="button"
-                          onClick={() => toggleGroup(group.name)}
+              <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+                <div className="border-border border-b p-4">
+                  <div className="border-input bg-background flex h-10 items-center gap-2 rounded-xl border px-3">
+                    <Search className="text-muted-foreground shrink-0" size={17} />
+                    <Input
+                      className="h-full border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                      placeholder="搜索频道"
+                      value={keyword}
+                      onChange={(event) => setKeyword(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {groupedChannels.length > 0 ? (
+                    <div className="flex flex-col p-4">
+                      {groupedChannels.map((group) => (
+                        <section key={group.name} className="border-border border-b last:border-b-0">
+                          <button
+                            aria-expanded={expandedGroups.has(group.name)}
+                            className="hover:bg-muted/70 focus-visible:ring-ring flex h-12 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors outline-none focus-visible:ring-2"
+                            type="button"
+                            onClick={() => toggleGroup(group.name)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                'text-muted-foreground shrink-0 transition-transform',
+                                expandedGroups.has(group.name) ? 'rotate-0' : '-rotate-90',
+                              )}
+                              size={16}
+                            />
+                            <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-semibold">
+                              {group.name}
+                            </span>
+                            <span className="text-muted-foreground shrink-0 text-xs font-semibold">
+                              {group.channels.length}
+                            </span>
+                          </button>
+                          {expandedGroups.has(group.name) ? (
+                            <div className="flex flex-col gap-1.5 pb-3">
+                              {group.channels.map((channel) => (
+                                <ChannelButton
+                                  key={channel.id}
+                                  active={channel.id === activeChannelId}
+                                  channel={channel}
+                                  onClick={() => selectChannel(channel)}
+                                />
+                              ))}
+                            </div>
+                          ) : null}
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyLiveState
+                      isLoading={isLoadingPlaylist || isLoadingSettings}
+                      hasSources={liveSources.length > 0}
+                      hasPlaylist={Boolean(playlist)}
+                    />
+                  )}
+                </div>
+
+                {activeChannel && activeChannel.streams.length > 1 ? (
+                  <div className="border-border bg-muted/40 border-t p-4">
+                    <div className="mb-2 text-xs font-semibold">线路</div>
+                    <div className="flex flex-wrap gap-2">
+                      {activeChannel.streams.map((stream) => (
+                        <Button
+                          key={stream.id}
+                          size="sm"
+                          variant={stream.id === activeStream?.id ? 'default' : 'outline'}
+                          onClick={() => setActiveStreamId(stream.id)}
                         >
-                          <ChevronDown
-                            className={cn(
-                              'text-muted-foreground shrink-0 transition-transform',
-                              expandedGroups.has(group.name) ? 'rotate-0' : '-rotate-90',
-                            )}
-                            size={16}
-                          />
-                          <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-semibold">
-                            {group.name}
-                          </span>
-                          <span className="text-muted-foreground shrink-0 text-xs font-semibold">
-                            {group.channels.length}
-                          </span>
-                        </button>
-                        {expandedGroups.has(group.name) ? (
-                          <div className="flex flex-col gap-1.5 pb-3">
-                            {group.channels.map((channel) => (
-                              <ChannelButton
-                                key={channel.id}
-                                active={channel.id === activeChannelId}
-                                channel={channel}
-                                onClick={() => selectChannel(channel)}
-                              />
-                            ))}
-                          </div>
-                        ) : null}
-                      </section>
-                    ))}
+                          {stream.name}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <EmptyLiveState
-                    isLoading={isLoadingPlaylist || isLoadingSettings}
-                    hasSources={liveSources.length > 0}
-                    hasPlaylist={Boolean(playlist)}
-                  />
-                )}
+                ) : null}
               </div>
-
-              {activeChannel && activeChannel.streams.length > 1 ? (
-                <div className="border-border bg-muted/40 border-t p-4">
-                  <div className="mb-2 text-xs font-semibold">线路</div>
-                  <div className="flex flex-wrap gap-2">
-                    {activeChannel.streams.map((stream) => (
-                      <Button
-                        key={stream.id}
-                        size="sm"
-                        variant={stream.id === activeStream?.id ? 'default' : 'outline'}
-                        onClick={() => setActiveStreamId(stream.id)}
-                      >
-                        {stream.name}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </div>
     </div>
@@ -419,6 +499,73 @@ function writeCachedPlaylist(source: LiveSourceConfig, playlist: LivePlaylist): 
     window.localStorage.setItem(LIVE_SELECTED_SOURCE_STORAGE_KEY, source.id)
   } catch {
     // Ignore storage quota/private mode failures; playback still works for the current session.
+  }
+}
+
+function getSelectionCacheKey(sourceId: string): string {
+  return `${LIVE_SELECTION_STORAGE_PREFIX}${sourceId}`
+}
+
+function readCachedSelection(sourceId: string): LiveSelectionCache | undefined {
+  try {
+    const rawValue = window.localStorage.getItem(getSelectionCacheKey(sourceId))
+    if (!rawValue) {
+      return undefined
+    }
+
+    const cachedSelection = JSON.parse(rawValue) as LiveSelectionCache
+    if (
+      typeof cachedSelection.channelId !== 'string' ||
+      typeof cachedSelection.streamId !== 'string' ||
+      !Array.isArray(cachedSelection.expandedGroups)
+    ) {
+      return undefined
+    }
+
+    return cachedSelection
+  } catch {
+    return undefined
+  }
+}
+
+function writeCachedSelection(sourceId: string, selection: LiveSelectionCache): void {
+  try {
+    window.localStorage.setItem(getSelectionCacheKey(sourceId), JSON.stringify(selection))
+  } catch {
+    // Ignore storage quota/private mode failures; playback still works for the current session.
+  }
+}
+
+function resolveLiveSelection(playlist: LivePlaylist, cached?: LiveSelectionCache): LiveSelectionCache {
+  const firstChannel = playlist.channels[0]
+  const fallback: LiveSelectionCache = {
+    channelId: firstChannel?.id ?? '',
+    streamId: firstChannel?.streams[0]?.id ?? '',
+    expandedGroups: firstChannel?.group ? [firstChannel.group] : [],
+  }
+
+  if (!cached) {
+    return fallback
+  }
+
+  const channel = playlist.channels.find((item) => item.id === cached.channelId) ?? firstChannel
+  if (!channel) {
+    return fallback
+  }
+
+  const stream = channel.streams.find((item) => item.id === cached.streamId) ?? channel.streams[0]
+  const knownGroups = new Set(playlist.channels.map((item) => item.group))
+  const expandedGroups = cached.expandedGroups.filter((group) => knownGroups.has(group))
+
+  return {
+    channelId: channel.id,
+    streamId: stream?.id ?? '',
+    expandedGroups:
+      expandedGroups.length > 0
+        ? expandedGroups.includes(channel.group)
+          ? expandedGroups
+          : [...expandedGroups, channel.group]
+        : [channel.group],
   }
 }
 

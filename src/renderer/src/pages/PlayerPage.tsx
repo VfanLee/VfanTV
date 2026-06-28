@@ -502,9 +502,7 @@ export function PlayerPage(): React.JSX.Element {
           <section
             className={cn(
               'overflow-hidden bg-black',
-              isTheaterMode
-                ? 'aspect-video w-full max-w-[calc(100vh*16/9)]'
-                : 'border-border min-h-0 flex-1 rounded-xl border shadow-sm',
+              isTheaterMode ? 'aspect-video w-full max-w-[calc(100vh*16/9)]' : 'min-h-0 flex-1 rounded-xl',
             )}
           >
             <BasicPlayer
