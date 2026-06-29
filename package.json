@@ -1,12 +1,15 @@
 {
-  "name": "vfantv",
+  "name": "vfan-tv",
   "version": "0.3.3",
-  "productName": "VfanTV",
-  "description": "A free, source-available, non-commercial local media player with configurable content sources.",
+  "description": "一款免费开源、开箱即用、跨平台的桌面端影视聚合播放器。",
   "main": "./out/main/index.js",
   "author": "VfanLee",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "GPL-3.0",
   "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": "11.7.0"
+  },
   "homepage": "https://github.com/vfanlee/VfanTV#readme",
   "repository": {
     "type": "git",
@@ -92,9 +95,5 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,css,md,html}": "prettier --write"
-  },
-  "engines": {
-    "node": ">=22.12.0 <23",
-    "pnpm": "11.7.0"
   }
 }

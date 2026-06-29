@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import Artplayer, { type Option } from 'artplayer'
 import Hls from 'hls.js'
-import { toast } from 'sonner'
 import { cn } from '@renderer/lib/utils'
 import { createFilteredHlsLoader } from '@renderer/lib/hls-playlist-filter'
 
@@ -43,20 +42,9 @@ interface BasicPlayerCallbacks {
   onNextEpisode?: () => void
   onPreviousEpisode?: () => void
   onProgress?: (progress: { currentTime: number; duration: number }) => void
-  onToggleStats?: () => void
-  onToggleTheaterMode?: () => void
 }
 
-interface PlayerStatsSnapshot {
-  bufferHealth: string
-  currentTime: string
-  duration: string
-  playbackUrl: string
-  playbackUrlDisplay: string
-  resolution: string
-  streamType: string
-  volume: string
-}
+type ArtplayerWithCallbacks = Artplayer & { vfanCallbacksRef?: MutableRefObject<BasicPlayerCallbacks> }
 
 export function BasicPlayer({
   autoPlay = false,
@@ -72,7 +60,6 @@ export function BasicPlayer({
   onNextEpisode,
   onPreviousEpisode,
   onProgress,
-  onToggleTheaterMode,
   sourceType,
   src,
   title,
@@ -85,15 +72,6 @@ export function BasicPlayer({
   const resumeAfterReloadRef = useRef(false)
   const callbacksRef = useRef<BasicPlayerCallbacks>({})
   const [playlistFilteringEnabled, setPlaylistFilteringEnabled] = useState(() => readPlaylistFilteringEnabled())
-  const [isStatsOpen, setIsStatsOpen] = useState(false)
-  const [stats, setStats] = useState<PlayerStatsSnapshot>(() =>
-    buildStatsSnapshot({
-      art: null,
-      formatPlaybackUrl,
-      isLive: variant === 'live',
-      src,
-    }),
-  )
 
   const isLive = variant === 'live'
   const isVod = variant === 'vod'
@@ -101,7 +79,6 @@ export function BasicPlayer({
   const adBlockEnabled = isVod && playlistFilteringEnabled
   const previousLabel = navigationLabels?.previous ?? '上一集'
   const nextLabel = navigationLabels?.next ?? '下一集'
-  const showTheaterMode = Boolean(onToggleTheaterMode)
 
   useEffect(() => {
     callbacksRef.current = {
@@ -109,19 +86,8 @@ export function BasicPlayer({
       onNextEpisode,
       onPreviousEpisode,
       onProgress,
-      onToggleStats: () => setIsStatsOpen((current) => !current),
-      onToggleTheaterMode,
     }
-  }, [onEnded, onNextEpisode, onPreviousEpisode, onProgress, onToggleTheaterMode])
-
-  useEffect(() => {
-    const art = artRef.current
-    if (!art) {
-      return
-    }
-
-    art.notice.show = isTheaterMode ? '影院模式' : ''
-  }, [isTheaterMode])
+  }, [onEnded, onNextEpisode, onPreviousEpisode, onProgress])
 
   useEffect(() => {
     const container = containerRef.current
@@ -162,9 +128,8 @@ export function BasicPlayer({
         hasPreviousEpisode,
         nextLabel,
         previousLabel,
-        showStats: Boolean(src),
-        showTheaterMode,
       }),
+      layers: buildLayers(),
       settings: isVod
         ? [
             {
@@ -212,6 +177,7 @@ export function BasicPlayer({
 
     artRef.current = art
     ;(art as ArtplayerWithCallbacks).vfanCallbacksRef = callbacksRef
+    localizeInfoPanel(art, { formatPlaybackUrl, isLive, src })
 
     const applyStartTime = (): void => {
       const requestedTime = retryTimeRef.current > 0 ? retryTimeRef.current : initialTime
@@ -253,6 +219,7 @@ export function BasicPlayer({
   }, [
     adBlockEnabled,
     autoPlay,
+    formatPlaybackUrl,
     hasNextEpisode,
     hasPreviousEpisode,
     initialTime,
@@ -263,31 +230,9 @@ export function BasicPlayer({
     nextLabel,
     playlistFilteringEnabled,
     previousLabel,
-    showTheaterMode,
     src,
     title,
   ])
-
-  useEffect(() => {
-    if (!isStatsOpen) {
-      return
-    }
-
-    const refreshStats = (): void => {
-      setStats(
-        buildStatsSnapshot({
-          art: artRef.current,
-          formatPlaybackUrl,
-          isLive,
-          src,
-        }),
-      )
-    }
-
-    refreshStats()
-    const timer = window.setInterval(refreshStats, 500)
-    return () => window.clearInterval(timer)
-  }, [formatPlaybackUrl, isLive, isStatsOpen, src])
 
   if (!src) {
     return (
@@ -310,12 +255,6 @@ export function BasicPlayer({
   return (
     <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
       <div ref={containerRef} className="h-full w-full [&_.art-video]:object-contain" />
-      <PlayerStatsOverlay
-        open={isStatsOpen}
-        stats={stats}
-        onClose={() => setIsStatsOpen(false)}
-        onCopy={() => void copyPlaybackUrl(src)}
-      />
     </div>
   )
 }
@@ -325,20 +264,17 @@ function buildControls({
   hasPreviousEpisode,
   nextLabel,
   previousLabel,
-  showStats,
-  showTheaterMode,
 }: {
   hasNextEpisode: boolean
   hasPreviousEpisode: boolean
   nextLabel: string
   previousLabel: string
-  showStats: boolean
-  showTheaterMode: boolean
 }): NonNullable<Option['controls']> {
   return [
     {
       name: 'previous',
       position: 'left',
+      index: 5,
       html: createControlIcon('previous'),
       tooltip: previousLabel,
       disable: !hasPreviousEpisode,
@@ -349,6 +285,7 @@ function buildControls({
     {
       name: 'next',
       position: 'left',
+      index: 15,
       html: createControlIcon('next'),
       tooltip: nextLabel,
       disable: !hasNextEpisode,
@@ -356,51 +293,23 @@ function buildControls({
         callbacksFromArt(this).onNextEpisode?.()
       },
     },
-    ...(showStats
-      ? [
-          {
-            name: 'stats',
-            position: 'right' as const,
-            html: createControlIcon('stats'),
-            tooltip: '统计信息',
-            click(this: Artplayer) {
-              callbacksFromArt(this).onToggleStats?.()
-            },
-          },
-        ]
-      : []),
+  ]
+}
+
+function buildLayers(): NonNullable<Option['layers']> {
+  return [
     {
-      name: 'retry',
-      position: 'right',
-      html: createControlIcon('retry'),
-      tooltip: '刷新重试',
-      click(this: Artplayer) {
-        const currentTime = this.currentTime
-        void this.switchUrl(this.url)
-          .then(() => {
-            if (currentTime > 0 && Number.isFinite(this.duration) && currentTime < this.duration) {
-              this.currentTime = currentTime
-            }
-            return this.play()
-          })
-          .catch((error: unknown) => {
-            this.notice.show = error instanceof Error ? error.message : '刷新重试失败'
-          })
+      name: 'top-actions',
+      html: createTopActions(),
+      mounted(this: Artplayer, element) {
+        const statsButton = element.querySelector<HTMLButtonElement>('[data-player-action="stats"]')
+        const retryButton = element.querySelector<HTMLButtonElement>('[data-player-action="retry"]')
+        statsButton?.addEventListener('click', () => {
+          this.info.show = !this.info.show
+        })
+        retryButton?.addEventListener('click', () => retryPlayback(this))
       },
     },
-    ...(showTheaterMode
-      ? [
-          {
-            name: 'theater-mode',
-            position: 'right' as const,
-            html: createControlIcon('theater'),
-            tooltip: '影院模式',
-            click(this: Artplayer) {
-              callbacksFromArt(this).onToggleTheaterMode?.()
-            },
-          },
-        ]
-      : []),
   ]
 }
 
@@ -408,140 +317,147 @@ function callbacksFromArt(art: Artplayer): BasicPlayerCallbacks {
   return (art as ArtplayerWithCallbacks).vfanCallbacksRef?.current ?? {}
 }
 
-type ArtplayerWithCallbacks = Artplayer & { vfanCallbacksRef?: MutableRefObject<BasicPlayerCallbacks> }
+function createTopActions(): HTMLElement {
+  const element = document.createElement('div')
+  element.style.cssText = [
+    'position:absolute',
+    'top:12px',
+    'right:12px',
+    'z-index:100',
+    'display:flex',
+    'align-items:center',
+    'gap:8px',
+    'pointer-events:auto',
+  ].join(';')
+  element.innerHTML = `
+    <button data-player-action="stats" type="button" title="统计信息" aria-label="统计信息">
+      ${getControlIconSvg('stats')}
+    </button>
+    <button data-player-action="retry" type="button" title="刷新重试" aria-label="刷新重试">
+      ${getControlIconSvg('retry')}
+    </button>
+  `
 
-function PlayerStatsOverlay({
-  open,
-  stats,
-  onClose,
-  onCopy,
-}: {
-  open: boolean
-  stats: PlayerStatsSnapshot
-  onClose: () => void
-  onCopy: () => void
-}): React.JSX.Element | null {
-  if (!open) {
-    return null
+  for (const button of element.querySelectorAll<HTMLElement>('button')) {
+    button.style.cssText = [
+      'width:34px',
+      'height:34px',
+      'border:0',
+      'border-radius:8px',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'color:rgba(255,255,255,.88)',
+      'background:rgba(0,0,0,.48)',
+      'cursor:pointer',
+    ].join(';')
   }
 
-  return (
-    <div className="absolute top-4 right-4 z-30 w-[min(26rem,calc(100%-2rem))] rounded-lg border border-white/10 bg-black/86 p-4 text-white shadow-2xl shadow-black/40 backdrop-blur-xl">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-white/92">统计信息</div>
-        <button
-          className="rounded-md px-2 py-1 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-          type="button"
-          onClick={onClose}
-        >
-          关闭
-        </button>
-      </div>
-      <div className="grid gap-2 text-xs">
-        <StatsRow label="类型" value={stats.streamType} />
-        <StatsRow label="时间" value={`${stats.currentTime} / ${stats.duration}`} />
-        <StatsRow label="分辨率" value={stats.resolution} />
-        <StatsRow label="缓冲" value={stats.bufferHealth} />
-        <StatsRow label="音量" value={stats.volume} />
-        <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-3 border-t border-white/10 pt-3">
-          <div className="text-white/45">播放地址</div>
-          <div className="min-w-0">
-            <div className="truncate font-mono text-white/82" title={stats.playbackUrl}>
-              {stats.playbackUrlDisplay}
-            </div>
-            <button
-              className="mt-2 rounded-md bg-white/10 px-2 py-1 text-xs font-semibold text-white/88 transition-colors hover:bg-white/18"
-              type="button"
-              onClick={onCopy}
-            >
-              复制地址
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return element
 }
 
-function StatsRow({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
-      <div className="text-white/45">{label}</div>
-      <div className="min-w-0 truncate text-white/82">{value}</div>
-    </div>
-  )
-}
-
-function createControlIcon(name: 'next' | 'previous' | 'retry' | 'stats' | 'theater'): HTMLElement {
+function createControlIcon(name: 'next' | 'previous'): HTMLElement {
   const element = document.createElement('span')
-  element.className = 'vfan-art-control-icon'
   element.innerHTML = getControlIconSvg(name)
   return element
 }
 
-function getControlIconSvg(name: 'next' | 'previous' | 'retry' | 'stats' | 'theater'): string {
+function getControlIconSvg(name: 'next' | 'previous' | 'retry' | 'stats'): string {
   const paths: Record<typeof name, string> = {
     previous: '<path d="m19 20-10-8 10-8v16Z"/><path d="M5 19V5"/>',
     next: '<path d="m5 4 10 8-10 8V4Z"/><path d="M19 5v14"/>',
-    retry: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
-    stats: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V7"/><path d="M17 16v-3"/>',
-    theater: '<rect x="3" y="6" width="18" height="11" rx="2"/><path d="M3 17h18"/>',
+    retry:
+      '<path d="M3 12a9 9 0 0 1 15.53-6.21"/><path d="M18 2v4h-4"/><path d="M21 12a9 9 0 0 1-15.53 6.21"/><path d="M6 22v-4h4"/>',
+    stats: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>',
   }
 
   return `<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`
 }
 
-function buildStatsSnapshot({
-  art,
-  formatPlaybackUrl,
-  isLive,
-  src,
-}: {
-  art: Artplayer | null
-  formatPlaybackUrl: (src: string) => string
-  isLive: boolean
-  src?: string
-}): PlayerStatsSnapshot {
-  const video = art?.video
-  const duration = art?.duration ?? 0
-  const volume = art?.volume ?? readStoredPlayerVolume()
-  const playbackUrl = src ?? ''
+function retryPlayback(art: Artplayer): void {
+  const currentTime = art.currentTime
+  void art
+    .switchUrl(art.url)
+    .then(() => {
+      if (currentTime > 0 && Number.isFinite(art.duration) && currentTime < art.duration) {
+        art.currentTime = currentTime
+      }
+      return art.play()
+    })
+    .catch((error: unknown) => {
+      art.notice.show = error instanceof Error ? error.message : '刷新重试失败'
+    })
+}
 
-  return {
-    bufferHealth: formatSeconds(art?.loadedTime ?? 0),
-    currentTime: formatTime(art?.currentTime ?? 0),
-    duration: isLive ? '直播' : formatTime(duration),
-    playbackUrl,
-    playbackUrlDisplay: playbackUrl ? formatPlaybackUrl(playbackUrl) : '-',
-    resolution:
-      video && video.videoWidth > 0 && video.videoHeight > 0 ? `${video.videoWidth}x${video.videoHeight}` : '-',
-    streamType: isLive ? '直播' : '点播',
-    volume: `${Math.round(volume * 100)}%`,
+function localizeInfoPanel(
+  art: Artplayer,
+  {
+    formatPlaybackUrl,
+    isLive,
+    src,
+  }: {
+    formatPlaybackUrl: (src: string) => string
+    isLive: boolean
+    src: string
+  },
+): void {
+  const { $infoClose, $infoPanel } = art.template
+  $infoClose.textContent = '关闭'
+  $infoPanel.innerHTML = `
+    <div class="art-info-item">
+      <div class="art-info-title">播放器版本：</div>
+      <div class="art-info-content">${Artplayer.version}</div>
+    </div>
+    <div class="art-info-item">
+      <div class="art-info-title">播放地址：</div>
+      <div class="art-info-content" data-vfan-info="url"></div>
+    </div>
+    <div class="art-info-item">
+      <div class="art-info-title">音量：</div>
+      <div class="art-info-content" data-vfan-info="volume"></div>
+    </div>
+    <div class="art-info-item">
+      <div class="art-info-title">播放时间：</div>
+      <div class="art-info-content" data-vfan-info="time"></div>
+    </div>
+    <div class="art-info-item">
+      <div class="art-info-title">总时长：</div>
+      <div class="art-info-content" data-vfan-info="duration"></div>
+    </div>
+    <div class="art-info-item">
+      <div class="art-info-title">分辨率：</div>
+      <div class="art-info-content" data-vfan-info="resolution"></div>
+    </div>
+  `
+
+  const refresh = (): void => {
+    setInfoText($infoPanel, 'url', formatPlaybackUrl(src))
+    setInfoText($infoPanel, 'volume', `${Math.round(art.volume * 100)}%`)
+    setInfoText($infoPanel, 'time', formatTime(art.currentTime))
+    setInfoText($infoPanel, 'duration', isLive ? '直播' : formatTime(art.duration))
+    setInfoText(
+      $infoPanel,
+      'resolution',
+      art.video.videoWidth > 0 && art.video.videoHeight > 0
+        ? `${art.video.videoWidth} x ${art.video.videoHeight}`
+        : '-',
+    )
+  }
+
+  refresh()
+  const timer = window.setInterval(refresh, 1000)
+  art.on('destroy', () => window.clearInterval(timer))
+}
+
+function setInfoText(panel: HTMLElement, name: string, value: string): void {
+  const element = panel.querySelector(`[data-vfan-info="${name}"]`)
+  if (element && element.textContent !== value) {
+    element.textContent = value
   }
 }
 
 function formatPlaybackUrlForDisplay(src: string): string {
-  try {
-    const url = new URL(src)
-    const filename = url.pathname.split('/').filter(Boolean).at(-1)
-    const search = url.search ? `?${url.searchParams.size} params` : ''
-    return `${url.origin}/${filename ?? ''}${search}`
-  } catch {
-    return src.length > 96 ? `${src.slice(0, 48)}...${src.slice(-36)}` : src
-  }
-}
-
-async function copyPlaybackUrl(src: string | undefined): Promise<void> {
-  if (!src) {
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(src)
-    toast.success('播放地址已复制')
-  } catch {
-    toast.error('复制失败')
-  }
+  return src
 }
 
 function formatTime(seconds: number): string {
@@ -555,14 +471,6 @@ function formatTime(seconds: number): string {
   const secs = total % 60
   const pad = (value: number): string => String(value).padStart(2, '0')
   return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}` : `${pad(minutes)}:${pad(secs)}`
-}
-
-function formatSeconds(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '-'
-  }
-
-  return `${Math.round(seconds)} 秒`
 }
 
 function isHlsSource(src: string | undefined, sourceType: BasicPlayerProps['sourceType']): boolean {
