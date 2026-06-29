@@ -246,23 +246,27 @@ function DownloadOptions({ fileName, url }: { fileName?: string; url: string }):
   useEffect(() => {
     let active = true
 
-    setIsTestingSpeed(true)
-    setSpeedResults(Object.fromEntries(downloadRoutePrefixes.map((route) => [route.label, { status: 'testing' }])))
-    void Promise.all(
-      downloadRoutePrefixes.map(async (route) => {
-        const result = await testDownloadRoute(applyReleaseRoutePrefix(url, route.prefix))
-        return [route.label, result] as const
-      }),
-    ).then((results) => {
+    queueMicrotask(() => {
       if (!active) return
 
-      const nextResults = Object.fromEntries(results)
-      const fastest = getFastestRoute(nextResults)
-      setSpeedResults(nextResults)
-      if (fastest) {
-        setSelectedRouteLabel(fastest.label)
-      }
-      setIsTestingSpeed(false)
+      setIsTestingSpeed(true)
+      setSpeedResults(Object.fromEntries(downloadRoutePrefixes.map((route) => [route.label, { status: 'testing' }])))
+      void Promise.all(
+        downloadRoutePrefixes.map(async (route) => {
+          const result = await testDownloadRoute(applyReleaseRoutePrefix(url, route.prefix))
+          return [route.label, result] as const
+        }),
+      ).then((results) => {
+        if (!active) return
+
+        const nextResults = Object.fromEntries(results)
+        const fastest = getFastestRoute(nextResults)
+        setSpeedResults(nextResults)
+        if (fastest) {
+          setSelectedRouteLabel(fastest.label)
+        }
+        setIsTestingSpeed(false)
+      })
     })
 
     return () => {

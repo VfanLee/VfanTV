@@ -1,34 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  MediaPlayer,
-  MediaProvider,
-  isHLSProvider,
-  type MediaErrorDetail,
-  type MediaPlayerInstance,
-  type PlayerSrc,
-} from '@vidstack/react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import Artplayer, { type Option } from 'artplayer'
 import Hls from 'hls.js'
+import { toast } from 'sonner'
 import { cn } from '@renderer/lib/utils'
 import { createFilteredHlsLoader } from '@renderer/lib/hls-playlist-filter'
-import { PlayerChrome } from './player/PlayerChrome'
-import {
-  PLAYER_CONTROLS_PRESETS,
-  type HlsSessionStats,
-  type PlayerErrorLog,
-  type PlayerNavigationLabels,
-  type PlayerVariant,
-} from './player/types'
 
-const MAX_ERROR_LOGS = 100
-const HLS_MIME_TYPE = 'application/x-mpegurl' as const
 const HLS_PLAYLIST_FILTER_STORAGE_KEY = 'enable_blockad'
 const PLAYER_VOLUME_STORAGE_KEY = 'vfan-player-volume'
 const DEFAULT_PLAYER_VOLUME = 0.8
-const EMPTY_HLS_SESSION_STATS: HlsSessionStats = {
-  audioCodec: null,
-  autoLevelEnabled: true,
-  bandwidthEstimate: null,
-  networkBytesLoaded: 0,
+const PLAYER_THEME = '#ffffff'
+
+export type PlayerVariant = 'vod' | 'live'
+
+export interface PlayerNavigationLabels {
+  previous: string
+  next: string
 }
 
 export interface BasicPlayerProps {
@@ -43,12 +29,33 @@ export interface BasicPlayerProps {
   isTheaterMode?: boolean
   loop?: boolean
   navigationLabels?: PlayerNavigationLabels
+  formatPlaybackUrl?: (src: string) => string
   onNextEpisode?: () => void
   onEnded?: () => void
   onPreviousEpisode?: () => void
   onProgress?: (progress: { currentTime: number; duration: number }) => void
   onToggleTheaterMode?: () => void
   variant?: PlayerVariant
+}
+
+interface BasicPlayerCallbacks {
+  onEnded?: () => void
+  onNextEpisode?: () => void
+  onPreviousEpisode?: () => void
+  onProgress?: (progress: { currentTime: number; duration: number }) => void
+  onToggleStats?: () => void
+  onToggleTheaterMode?: () => void
+}
+
+interface PlayerStatsSnapshot {
+  bufferHealth: string
+  currentTime: string
+  duration: string
+  playbackUrl: string
+  playbackUrlDisplay: string
+  resolution: string
+  streamType: string
+  volume: string
 }
 
 export function BasicPlayer({
@@ -59,160 +66,239 @@ export function BasicPlayer({
   initialTime = 0,
   isTheaterMode = false,
   loop = false,
+  formatPlaybackUrl = formatPlaybackUrlForDisplay,
   navigationLabels,
-  onNextEpisode,
   onEnded,
+  onNextEpisode,
   onPreviousEpisode,
   onProgress,
   onToggleTheaterMode,
-  src,
   sourceType,
+  src,
   title,
   variant = 'vod',
 }: BasicPlayerProps): React.JSX.Element {
-  const playerRef = useRef<MediaPlayerInstance | null>(null)
-  const errorLogIdRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const artRef = useRef<Artplayer | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const retryTimeRef = useRef(0)
   const resumeAfterReloadRef = useRef(false)
-  const appliedLoadKeyRef = useRef('')
-  const hlsDisposeRef = useRef<(() => void) | null>(null)
-  const networkBytesRef = useRef(0)
-  const [reloadNonce, setReloadNonce] = useState(0)
-  const controls = PLAYER_CONTROLS_PRESETS[variant]
+  const callbacksRef = useRef<BasicPlayerCallbacks>({})
   const [playlistFilteringEnabled, setPlaylistFilteringEnabled] = useState(() => readPlaylistFilteringEnabled())
-  const [hlsSessionStats, setHlsSessionStats] = useState<HlsSessionStats>(EMPTY_HLS_SESSION_STATS)
-  const [playbackSettings, setPlaybackSettings] = useState(() => ({
-    playbackRate: 1,
-    volume: readStoredPlayerVolume(),
-    muted: false,
-  }))
-  const [errorState, setErrorState] = useState<{ src: string | undefined; logs: PlayerErrorLog[] }>({
-    src,
-    logs: [],
-  })
-  const playerSrc = useMemo<PlayerSrc | undefined>(() => getPlayerSource(src, sourceType), [sourceType, src])
-  const errorLogs = errorState.src === src ? errorState.logs : []
-  const loadKey = `${src ?? ''}:${reloadNonce}`
-  const adBlockEnabled = controls.adBlock && playlistFilteringEnabled
-
-  useEffect(() => {
-    networkBytesRef.current = 0
-    setHlsSessionStats(EMPTY_HLS_SESSION_STATS)
-    hlsDisposeRef.current?.()
-    hlsDisposeRef.current = null
-  }, [loadKey])
-
-  useEffect(() => {
-    return () => {
-      hlsDisposeRef.current?.()
-      hlsDisposeRef.current = null
-    }
-  }, [])
-
-  const appendErrorLog = useCallback(
-    (source: PlayerErrorLog['source'], message: string, fatal: boolean): void => {
-      errorLogIdRef.current += 1
-      const nextLog: PlayerErrorLog = {
-        id: errorLogIdRef.current,
-        timestamp: Date.now(),
-        source,
-        message,
-        fatal,
-      }
-
-      setErrorState((current) => {
-        const currentLogs = current.src === src ? current.logs : []
-        return { src, logs: [...currentLogs.slice(-(MAX_ERROR_LOGS - 1)), nextLog] }
-      })
-    },
-    [src],
+  const [isStatsOpen, setIsStatsOpen] = useState(false)
+  const [stats, setStats] = useState<PlayerStatsSnapshot>(() =>
+    buildStatsSnapshot({
+      art: null,
+      formatPlaybackUrl,
+      isLive: variant === 'live',
+      src,
+    }),
   )
 
-  const retryPlayback = (): void => {
-    retryTimeRef.current = playerRef.current?.currentTime ?? 0
-    appliedLoadKeyRef.current = ''
-    setReloadNonce((current) => current + 1)
-  }
+  const isLive = variant === 'live'
+  const isVod = variant === 'vod'
+  const isHls = isHlsSource(src, sourceType)
+  const adBlockEnabled = isVod && playlistFilteringEnabled
+  const previousLabel = navigationLabels?.previous ?? '上一集'
+  const nextLabel = navigationLabels?.next ?? '下一集'
+  const showTheaterMode = Boolean(onToggleTheaterMode)
 
-  const togglePlaylistFiltering = useCallback((): void => {
-    if (!controls.adBlock) {
+  useEffect(() => {
+    callbacksRef.current = {
+      onEnded,
+      onNextEpisode,
+      onPreviousEpisode,
+      onProgress,
+      onToggleStats: () => setIsStatsOpen((current) => !current),
+      onToggleTheaterMode,
+    }
+  }, [onEnded, onNextEpisode, onPreviousEpisode, onProgress, onToggleTheaterMode])
+
+  useEffect(() => {
+    const art = artRef.current
+    if (!art) {
       return
     }
 
-    const nextEnabled = !playlistFilteringEnabled
-    window.localStorage.setItem(HLS_PLAYLIST_FILTER_STORAGE_KEY, String(nextEnabled))
+    art.notice.show = isTheaterMode ? '影院模式' : ''
+  }, [isTheaterMode])
 
-    if (isHlsSource(src)) {
-      retryTimeRef.current = playerRef.current?.currentTime ?? 0
-      resumeAfterReloadRef.current = true
-      appliedLoadKeyRef.current = ''
-      setReloadNonce((current) => current + 1)
-    }
-
-    setPlaylistFilteringEnabled(nextEnabled)
-  }, [controls.adBlock, playlistFilteringEnabled, src])
-
-  const handlePlaybackRateChange = useCallback((playbackRate: number): void => {
-    setPlaybackSettings((current) => ({ ...current, playbackRate }))
-  }, [])
-
-  const syncHlsSessionStats = useCallback((hls: Hls): void => {
-    const audioTrack = hls.audioTracks?.[hls.audioTrack]
-    setHlsSessionStats({
-      audioCodec: audioTrack?.audioCodec ?? null,
-      autoLevelEnabled: hls.autoLevelEnabled,
-      bandwidthEstimate: hls.bandwidthEstimate ?? null,
-      networkBytesLoaded: networkBytesRef.current,
-    })
-  }, [])
-
-  const applyStartTime = (duration: number): void => {
-    const player = playerRef.current
-    if (!player || appliedLoadKeyRef.current === loadKey || !Number.isFinite(duration) || duration <= 0) {
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !src) {
       return
     }
 
-    const requestedTime = retryTimeRef.current > 0 ? retryTimeRef.current : initialTime
-    if (requestedTime > 0 && requestedTime < duration) {
-      player.currentTime = requestedTime
+    destroyHls(hlsRef)
+    container.innerHTML = ''
+    container.setAttribute('aria-label', title ?? 'VfanTV 播放器')
+
+    const art = new Artplayer({
+      container,
+      url: src,
+      type: isHls ? 'm3u8' : undefined,
+      theme: PLAYER_THEME,
+      volume: readStoredPlayerVolume(),
+      muted: false,
+      autoplay: autoPlay,
+      loop,
+      isLive,
+      setting: isVod,
+      playbackRate: isVod,
+      hotkey: true,
+      fullscreen: true,
+      fullscreenWeb: true,
+      miniProgressBar: isVod,
+      playsInline: true,
+      mutex: true,
+      backdrop: true,
+      moreVideoAttr: {
+        preload: 'metadata',
+        playsInline: true,
+        title: title ?? 'VfanTV 播放器',
+      },
+      controls: buildControls({
+        hasNextEpisode,
+        hasPreviousEpisode,
+        nextLabel,
+        previousLabel,
+        showStats: Boolean(src),
+        showTheaterMode,
+      }),
+      settings: isVod
+        ? [
+            {
+              name: 'playlist-filtering',
+              html: '去广告（实验性）',
+              switch: playlistFilteringEnabled,
+              onSwitch(item) {
+                const nextEnabled = !item.switch
+                item.switch = nextEnabled
+                window.localStorage.setItem(HLS_PLAYLIST_FILTER_STORAGE_KEY, String(nextEnabled))
+                retryTimeRef.current = artRef.current?.currentTime ?? 0
+                resumeAfterReloadRef.current = true
+                setPlaylistFilteringEnabled(nextEnabled)
+              },
+            },
+          ]
+        : [],
+      customType: {
+        m3u8(video, url, artInstance) {
+          destroyHls(hlsRef)
+
+          if (Hls.isSupported()) {
+            const hls = new Hls(adBlockEnabled ? { loader: createFilteredHlsLoader(Hls) } : undefined)
+            hlsRef.current = hls
+            artInstance.hls = hls
+            hls.loadSource(url)
+            hls.attachMedia(video)
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+              if (data.fatal) {
+                artInstance.notice.show = `播放失败：${data.details}`
+              }
+            })
+            return
+          }
+
+          if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url
+            return
+          }
+
+          artInstance.notice.show = '当前环境不支持 HLS 播放'
+        },
+      },
+    } satisfies Option)
+
+    artRef.current = art
+    ;(art as ArtplayerWithCallbacks).vfanCallbacksRef = callbacksRef
+
+    const applyStartTime = (): void => {
+      const requestedTime = retryTimeRef.current > 0 ? retryTimeRef.current : initialTime
+      if (requestedTime > 0 && Number.isFinite(art.duration) && requestedTime < art.duration) {
+        art.currentTime = requestedTime
+      }
+      retryTimeRef.current = 0
+
+      if (resumeAfterReloadRef.current) {
+        resumeAfterReloadRef.current = false
+        void art.play()
+      }
     }
 
-    retryTimeRef.current = 0
-    appliedLoadKeyRef.current = loadKey
-
-    if (resumeAfterReloadRef.current) {
-      resumeAfterReloadRef.current = false
-      void player.play()
-    }
-  }
-
-  const reportProgress = (currentTime: number, duration: number): void => {
-    onProgress?.({
-      currentTime: Math.floor(currentTime),
-      duration: Number.isFinite(duration) ? Math.floor(duration) : 0,
+    art.on('ready', applyStartTime)
+    art.on('video:canplay', applyStartTime)
+    art.on('video:timeupdate', () => {
+      callbacksRef.current.onProgress?.({
+        currentTime: Math.floor(art.currentTime),
+        duration: Number.isFinite(art.duration) ? Math.floor(art.duration) : 0,
+      })
     })
-  }
+    art.on('video:ended', () => callbacksRef.current.onEnded?.())
+    art.on('video:volumechange', () => {
+      window.localStorage.setItem(PLAYER_VOLUME_STORAGE_KEY, String(art.volume))
+    })
+    art.on('error', (error) => {
+      art.notice.show = error.message || '播放器加载失败'
+    })
 
-  const reportMediaError = (detail: MediaErrorDetail): void => {
-    appendErrorLog(
-      'MediaProvider',
-      detail.message || (detail.code ? `媒体加载失败，错误代码 ${detail.code}` : '播放器加载失败'),
-      true,
-    )
-  }
+    return () => {
+      destroyHls(hlsRef)
+      art.destroy(false)
+      if (artRef.current === art) {
+        artRef.current = null
+      }
+      container.innerHTML = ''
+    }
+  }, [
+    adBlockEnabled,
+    autoPlay,
+    hasNextEpisode,
+    hasPreviousEpisode,
+    initialTime,
+    isHls,
+    isLive,
+    isVod,
+    loop,
+    nextLabel,
+    playlistFilteringEnabled,
+    previousLabel,
+    showTheaterMode,
+    src,
+    title,
+  ])
 
-  const chromePaddingClass = isTheaterMode ? 'h-full' : controls.progress ? 'pt-14 pb-20' : 'pt-14 pb-16'
+  useEffect(() => {
+    if (!isStatsOpen) {
+      return
+    }
 
-  if (!src || !playerSrc) {
+    const refreshStats = (): void => {
+      setStats(
+        buildStatsSnapshot({
+          art: artRef.current,
+          formatPlaybackUrl,
+          isLive,
+          src,
+        }),
+      )
+    }
+
+    refreshStats()
+    const timer = window.setInterval(refreshStats, 500)
+    return () => window.clearInterval(timer)
+  }, [formatPlaybackUrl, isLive, isStatsOpen, src])
+
+  if (!src) {
     return (
       <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
-        <div aria-hidden="true" className={cn('pointer-events-none w-full', chromePaddingClass)}>
+        <div aria-hidden="true" className="pointer-events-none w-full pt-14 pb-16">
           <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
         </div>
         <div
           className={cn(
             'absolute inset-x-0 flex items-center justify-center text-sm text-white/55',
-            isTheaterMode ? 'inset-y-0' : controls.progress ? 'top-14 bottom-20' : 'top-14 bottom-16',
+            isTheaterMode ? 'inset-y-0' : 'top-14 bottom-16',
           )}
         >
           请选择一个可播放剧集
@@ -222,124 +308,269 @@ export function BasicPlayer({
   }
 
   return (
-    <MediaPlayer
-      key={loadKey}
-      ref={playerRef}
-      autoPlay={autoPlay}
-      className={cn(
-        'group/player relative w-full overflow-hidden bg-black outline-none',
-        isTheaterMode && 'h-full',
-        className,
-      )}
-      controlsDelay={2000}
-      hideControlsOnMouseLeave
-      keyDisabled
-      load="eager"
-      logLevel="warn"
-      loop={loop}
-      muted={playbackSettings.muted}
-      playbackRate={playbackSettings.playbackRate}
-      playsInline
-      preload="metadata"
-      src={playerSrc}
-      title={title ?? 'VfanTV 播放器'}
-      volume={playbackSettings.volume}
-      onCanPlay={(detail) => applyStartTime(detail.duration)}
-      onEnded={() => onEnded?.()}
-      onError={reportMediaError}
-      onHlsError={(detail) => {
-        const message = `${detail.type}: ${detail.details}${detail.error?.message ? ` - ${detail.error.message}` : ''}`
-        appendErrorLog('HLS', message, detail.fatal)
-      }}
-      onProviderChange={(provider) => {
-        hlsDisposeRef.current?.()
-        hlsDisposeRef.current = null
-
-        if (isHLSProvider(provider)) {
-          if (adBlockEnabled) {
-            provider.config = {
-              ...provider.config,
-              loader: createFilteredHlsLoader(Hls),
-            }
-          }
-          provider.library = Hls
-
-          hlsDisposeRef.current = provider.onInstance((hls) => {
-            const onFragLoaded = (_event: string, data: { frag?: { stats?: { total?: number } } }): void => {
-              networkBytesRef.current += data.frag?.stats?.total ?? 0
-              syncHlsSessionStats(hls)
-            }
-            const onLevelSwitched = (): void => {
-              syncHlsSessionStats(hls)
-            }
-
-            hls.on(Hls.Events.FRAG_LOADED, onFragLoaded)
-            hls.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
-            syncHlsSessionStats(hls)
-
-            return () => {
-              hls.off(Hls.Events.FRAG_LOADED, onFragLoaded)
-              hls.off(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
-            }
-          })
-        }
-      }}
-      onRateChange={(playbackRate) => {
-        setPlaybackSettings((current) => ({ ...current, playbackRate }))
-      }}
-      onTimeUpdate={(detail) => reportProgress(detail.currentTime, playerRef.current?.duration ?? 0)}
-      onVolumeChange={(detail) => {
-        window.localStorage.setItem(PLAYER_VOLUME_STORAGE_KEY, String(detail.volume))
-        setPlaybackSettings((current) => ({
-          ...current,
-          muted: detail.muted,
-          volume: detail.volume,
-        }))
-      }}
-    >
-      <div aria-hidden="true" className={cn('pointer-events-none w-full', chromePaddingClass)}>
-        <div className={cn('w-full', isTheaterMode ? 'h-full' : 'aspect-video')} />
-      </div>
-      <MediaProvider
-        className={cn(
-          'pointer-events-none absolute inset-x-0 bg-black [&>video]:h-full [&>video]:w-full [&>video]:object-contain',
-          isTheaterMode ? 'inset-y-0' : controls.progress ? 'top-14 bottom-20' : 'top-14 bottom-16',
-        )}
+    <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
+      <div ref={containerRef} className="h-full w-full [&_.art-video]:object-contain" />
+      <PlayerStatsOverlay
+        open={isStatsOpen}
+        stats={stats}
+        onClose={() => setIsStatsOpen(false)}
+        onCopy={() => void copyPlaybackUrl(src)}
       />
-      <PlayerChrome
-        controls={controls}
-        errorLogs={errorLogs}
-        hasNextEpisode={hasNextEpisode}
-        hasPreviousEpisode={hasPreviousEpisode}
-        hlsSessionStats={hlsSessionStats}
-        isTheaterMode={isTheaterMode}
-        navigationLabels={navigationLabels}
-        playlistFilteringEnabled={playlistFilteringEnabled}
-        playerRef={playerRef}
-        src={src}
-        title={title}
-        variant={variant}
-        onNextEpisode={onNextEpisode}
-        onPlaybackRateChange={handlePlaybackRateChange}
-        onPreviousEpisode={onPreviousEpisode}
-        onRetry={retryPlayback}
-        onToggleTheaterMode={onToggleTheaterMode}
-        onTogglePlaylistFiltering={togglePlaylistFiltering}
-      />
-    </MediaPlayer>
+    </div>
   )
 }
 
-function isHlsSource(src: string | undefined): boolean {
+function buildControls({
+  hasNextEpisode,
+  hasPreviousEpisode,
+  nextLabel,
+  previousLabel,
+  showStats,
+  showTheaterMode,
+}: {
+  hasNextEpisode: boolean
+  hasPreviousEpisode: boolean
+  nextLabel: string
+  previousLabel: string
+  showStats: boolean
+  showTheaterMode: boolean
+}): NonNullable<Option['controls']> {
+  return [
+    {
+      name: 'previous',
+      position: 'left',
+      html: createControlIcon('previous'),
+      tooltip: previousLabel,
+      disable: !hasPreviousEpisode,
+      click(this: Artplayer) {
+        callbacksFromArt(this).onPreviousEpisode?.()
+      },
+    },
+    {
+      name: 'next',
+      position: 'left',
+      html: createControlIcon('next'),
+      tooltip: nextLabel,
+      disable: !hasNextEpisode,
+      click(this: Artplayer) {
+        callbacksFromArt(this).onNextEpisode?.()
+      },
+    },
+    ...(showStats
+      ? [
+          {
+            name: 'stats',
+            position: 'right' as const,
+            html: createControlIcon('stats'),
+            tooltip: '统计信息',
+            click(this: Artplayer) {
+              callbacksFromArt(this).onToggleStats?.()
+            },
+          },
+        ]
+      : []),
+    {
+      name: 'retry',
+      position: 'right',
+      html: createControlIcon('retry'),
+      tooltip: '刷新重试',
+      click(this: Artplayer) {
+        const currentTime = this.currentTime
+        void this.switchUrl(this.url)
+          .then(() => {
+            if (currentTime > 0 && Number.isFinite(this.duration) && currentTime < this.duration) {
+              this.currentTime = currentTime
+            }
+            return this.play()
+          })
+          .catch((error: unknown) => {
+            this.notice.show = error instanceof Error ? error.message : '刷新重试失败'
+          })
+      },
+    },
+    ...(showTheaterMode
+      ? [
+          {
+            name: 'theater-mode',
+            position: 'right' as const,
+            html: createControlIcon('theater'),
+            tooltip: '影院模式',
+            click(this: Artplayer) {
+              callbacksFromArt(this).onToggleTheaterMode?.()
+            },
+          },
+        ]
+      : []),
+  ]
+}
+
+function callbacksFromArt(art: Artplayer): BasicPlayerCallbacks {
+  return (art as ArtplayerWithCallbacks).vfanCallbacksRef?.current ?? {}
+}
+
+type ArtplayerWithCallbacks = Artplayer & { vfanCallbacksRef?: MutableRefObject<BasicPlayerCallbacks> }
+
+function PlayerStatsOverlay({
+  open,
+  stats,
+  onClose,
+  onCopy,
+}: {
+  open: boolean
+  stats: PlayerStatsSnapshot
+  onClose: () => void
+  onCopy: () => void
+}): React.JSX.Element | null {
+  if (!open) {
+    return null
+  }
+
+  return (
+    <div className="absolute top-4 right-4 z-30 w-[min(26rem,calc(100%-2rem))] rounded-lg border border-white/10 bg-black/86 p-4 text-white shadow-2xl shadow-black/40 backdrop-blur-xl">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-white/92">统计信息</div>
+        <button
+          className="rounded-md px-2 py-1 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          type="button"
+          onClick={onClose}
+        >
+          关闭
+        </button>
+      </div>
+      <div className="grid gap-2 text-xs">
+        <StatsRow label="类型" value={stats.streamType} />
+        <StatsRow label="时间" value={`${stats.currentTime} / ${stats.duration}`} />
+        <StatsRow label="分辨率" value={stats.resolution} />
+        <StatsRow label="缓冲" value={stats.bufferHealth} />
+        <StatsRow label="音量" value={stats.volume} />
+        <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-3 border-t border-white/10 pt-3">
+          <div className="text-white/45">播放地址</div>
+          <div className="min-w-0">
+            <div className="truncate font-mono text-white/82" title={stats.playbackUrl}>
+              {stats.playbackUrlDisplay}
+            </div>
+            <button
+              className="mt-2 rounded-md bg-white/10 px-2 py-1 text-xs font-semibold text-white/88 transition-colors hover:bg-white/18"
+              type="button"
+              onClick={onCopy}
+            >
+              复制地址
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatsRow({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+      <div className="text-white/45">{label}</div>
+      <div className="min-w-0 truncate text-white/82">{value}</div>
+    </div>
+  )
+}
+
+function createControlIcon(name: 'next' | 'previous' | 'retry' | 'stats' | 'theater'): HTMLElement {
+  const element = document.createElement('span')
+  element.className = 'vfan-art-control-icon'
+  element.innerHTML = getControlIconSvg(name)
+  return element
+}
+
+function getControlIconSvg(name: 'next' | 'previous' | 'retry' | 'stats' | 'theater'): string {
+  const paths: Record<typeof name, string> = {
+    previous: '<path d="m19 20-10-8 10-8v16Z"/><path d="M5 19V5"/>',
+    next: '<path d="m5 4 10 8-10 8V4Z"/><path d="M19 5v14"/>',
+    retry: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
+    stats: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V7"/><path d="M17 16v-3"/>',
+    theater: '<rect x="3" y="6" width="18" height="11" rx="2"/><path d="M3 17h18"/>',
+  }
+
+  return `<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`
+}
+
+function buildStatsSnapshot({
+  art,
+  formatPlaybackUrl,
+  isLive,
+  src,
+}: {
+  art: Artplayer | null
+  formatPlaybackUrl: (src: string) => string
+  isLive: boolean
+  src?: string
+}): PlayerStatsSnapshot {
+  const video = art?.video
+  const duration = art?.duration ?? 0
+  const volume = art?.volume ?? readStoredPlayerVolume()
+  const playbackUrl = src ?? ''
+
+  return {
+    bufferHealth: formatSeconds(art?.loadedTime ?? 0),
+    currentTime: formatTime(art?.currentTime ?? 0),
+    duration: isLive ? '直播' : formatTime(duration),
+    playbackUrl,
+    playbackUrlDisplay: playbackUrl ? formatPlaybackUrl(playbackUrl) : '-',
+    resolution:
+      video && video.videoWidth > 0 && video.videoHeight > 0 ? `${video.videoWidth}x${video.videoHeight}` : '-',
+    streamType: isLive ? '直播' : '点播',
+    volume: `${Math.round(volume * 100)}%`,
+  }
+}
+
+function formatPlaybackUrlForDisplay(src: string): string {
+  try {
+    const url = new URL(src)
+    const filename = url.pathname.split('/').filter(Boolean).at(-1)
+    const search = url.search ? `?${url.searchParams.size} params` : ''
+    return `${url.origin}/${filename ?? ''}${search}`
+  } catch {
+    return src.length > 96 ? `${src.slice(0, 48)}...${src.slice(-36)}` : src
+  }
+}
+
+async function copyPlaybackUrl(src: string | undefined): Promise<void> {
+  if (!src) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(src)
+    toast.success('播放地址已复制')
+  } catch {
+    toast.error('复制失败')
+  }
+}
+
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '00:00'
+  }
+
+  const total = Math.floor(seconds)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}` : `${pad(minutes)}:${pad(secs)}`
+}
+
+function formatSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '-'
+  }
+
+  return `${Math.round(seconds)} 秒`
+}
+
+function isHlsSource(src: string | undefined, sourceType: BasicPlayerProps['sourceType']): boolean {
   if (!src) {
     return false
   }
 
-  if (/\.m3u8(?:$|[?#])/i.test(src)) {
-    return true
-  }
-
-  return false
+  return sourceType === 'hls' || /\.m3u8(?:$|[?#])/i.test(src)
 }
 
 function readPlaylistFilteringEnabled(): boolean {
@@ -356,14 +587,7 @@ function readStoredPlayerVolume(): number {
   return Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : DEFAULT_PLAYER_VOLUME
 }
 
-function getPlayerSource(src: string | undefined, sourceType: BasicPlayerProps['sourceType']): PlayerSrc | undefined {
-  if (!src) {
-    return undefined
-  }
-
-  if (sourceType === 'hls' || isHlsSource(src)) {
-    return { src, type: HLS_MIME_TYPE }
-  }
-
-  return src
+function destroyHls(hlsRef: MutableRefObject<Hls | null>): void {
+  hlsRef.current?.destroy()
+  hlsRef.current = null
 }

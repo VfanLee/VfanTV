@@ -6,6 +6,7 @@
   "main": "./out/main/index.js",
   "author": "VfanLee",
   "license": "SEE LICENSE IN LICENSE",
+  "packageManager": "pnpm@11.7.0",
   "homepage": "https://github.com/vfanlee/VfanTV#readme",
   "repository": {
     "type": "git",
@@ -39,6 +40,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@fontsource-variable/noto-sans": "^5.2.10",
     "@xmldom/xmldom": "^0.8.13",
+    "artplayer": "5.4.0",
     "axios": "^1.17.0",
     "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
@@ -58,7 +60,6 @@
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@vidstack/react": "1.15.6",
     "@vitejs/plugin-react": "^5.1.1",
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.10",
@@ -92,11 +93,8 @@
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,css,md,html}": "prettier --write"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "electron",
-      "esbuild"
-    ]
+  "engines": {
+    "node": ">=22.12.0 <23",
+    "pnpm": "11.7.0"
   }
 }
