@@ -7,7 +7,7 @@ import packageJson from '../../package.json'
 import { registerIpcHandlers, setMainWindow } from './ipc/register-handlers'
 import { isAllowedExternalUrl, openExternalUrl } from './services/external-link'
 import { checkLatestRelease } from './services/update-checker'
-import { APP_DISPLAY_NAME, APP_ID, USER_DATA_DIR_NAME } from '@shared/constants/app-brand'
+import { APP_DISPLAY_NAME, APP_ID, USER_DATA_DIR_NAME } from '@shared/constants'
 
 const APP_VERSION = packageJson.version
 let aboutWindow: BrowserWindow | null = null

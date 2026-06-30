@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Loader2, Play, Radio, RefreshCw, Search, Tv } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  LIVE_PLAYLIST_CACHE_PREFIX,
+  LIVE_SELECTED_SOURCE_STORAGE_KEY,
+  LIVE_SELECTION_STORAGE_PREFIX,
+} from '@shared/constants'
 import type { LiveChannel, LivePlaylist, LiveSourceConfig } from '@shared/types'
 import { BasicPlayer } from '@renderer/components'
 import { cn } from '@renderer/lib/utils'
@@ -15,10 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@renderer/components/ui/select'
-
-const LIVE_PLAYLIST_CACHE_PREFIX = 'vfantv-live-playlist:'
-const LIVE_SELECTED_SOURCE_STORAGE_KEY = 'vfantv-live-selected-source-id'
-const LIVE_SELECTION_STORAGE_PREFIX = 'vfantv-live-selection:'
 
 interface LiveSelectionCache {
   channelId: string

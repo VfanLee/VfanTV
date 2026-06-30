@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import Artplayer, { type Option } from 'artplayer'
+import artplayerPluginAmbilight from 'artplayer-plugin-ambilight'
+import artplayerPluginAudioTrack from 'artplayer-plugin-audio-track'
+import artplayerPluginHlsControl from 'artplayer-plugin-hls-control'
 import Hls from 'hls.js'
 import { cn } from '@renderer/lib/utils'
-import { createFilteredHlsLoader } from '@renderer/lib/hls-playlist-filter'
-
-const HLS_PLAYLIST_FILTER_STORAGE_KEY = 'enable_blockad'
-const PLAYER_VOLUME_STORAGE_KEY = 'vfan-player-volume'
-const DEFAULT_PLAYER_VOLUME = 0.8
-const PLAYER_THEME = '#ffffff'
 
 export type PlayerVariant = 'vod' | 'live'
 
@@ -18,6 +15,7 @@ export interface PlayerNavigationLabels {
 
 export interface BasicPlayerProps {
   autoPlay?: boolean
+  audioTrackUrl?: string
   className?: string
   src?: string
   sourceType?: 'hls'
@@ -39,26 +37,17 @@ export interface BasicPlayerProps {
 
 interface BasicPlayerCallbacks {
   onEnded?: () => void
-  onNextEpisode?: () => void
-  onPreviousEpisode?: () => void
   onProgress?: (progress: { currentTime: number; duration: number }) => void
 }
 
-type ArtplayerWithCallbacks = Artplayer & { vfanCallbacksRef?: MutableRefObject<BasicPlayerCallbacks> }
-
 export function BasicPlayer({
   autoPlay = false,
+  audioTrackUrl,
   className,
-  hasNextEpisode = false,
-  hasPreviousEpisode = false,
   initialTime = 0,
   isTheaterMode = false,
   loop = false,
-  formatPlaybackUrl = formatPlaybackUrlForDisplay,
-  navigationLabels,
   onEnded,
-  onNextEpisode,
-  onPreviousEpisode,
   onProgress,
   sourceType,
   src,
@@ -68,26 +57,17 @@ export function BasicPlayer({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const artRef = useRef<Artplayer | null>(null)
   const hlsRef = useRef<Hls | null>(null)
-  const retryTimeRef = useRef(0)
-  const resumeAfterReloadRef = useRef(false)
   const callbacksRef = useRef<BasicPlayerCallbacks>({})
-  const [playlistFilteringEnabled, setPlaylistFilteringEnabled] = useState(() => readPlaylistFilteringEnabled())
 
   const isLive = variant === 'live'
-  const isVod = variant === 'vod'
   const isHls = isHlsSource(src, sourceType)
-  const adBlockEnabled = isVod && playlistFilteringEnabled
-  const previousLabel = navigationLabels?.previous ?? '上一集'
-  const nextLabel = navigationLabels?.next ?? '下一集'
 
   useEffect(() => {
     callbacksRef.current = {
       onEnded,
-      onNextEpisode,
-      onPreviousEpisode,
       onProgress,
     }
-  }, [onEnded, onNextEpisode, onPreviousEpisode, onProgress])
+  }, [onEnded, onProgress])
 
   useEffect(() => {
     const container = containerRef.current
@@ -100,59 +80,75 @@ export function BasicPlayer({
     container.setAttribute('aria-label', title ?? 'VfanTV 播放器')
 
     const art = new Artplayer({
-      container,
-      url: src,
-      type: isHls ? 'm3u8' : undefined,
-      theme: PLAYER_THEME,
-      volume: readStoredPlayerVolume(),
-      muted: false,
-      autoplay: autoPlay,
-      loop,
-      isLive,
-      setting: isVod,
-      playbackRate: isVod,
-      hotkey: true,
-      fullscreen: true,
-      fullscreenWeb: true,
-      miniProgressBar: isVod,
-      playsInline: true,
-      mutex: true,
-      backdrop: true,
+      container, // 播放器挂载的 DOM 容器
+      url: src, // 当前实际播放地址
+      type: isHls ? 'm3u8' : '', // 播放源类型，HLS 源交给 customType.m3u8 处理
+      autoplay: autoPlay, // 是否自动播放
+      loop, // 是否循环播放
+      isLive, // 是否启用直播模式
+      setting: true, // 是否显示原生设置面板
+      playbackRate: !isLive, // 是否显示倍速菜单，直播不显示
+      aspectRatio: true, // 是否启用画面比例菜单
+      flip: true, // 是否启用画面翻转菜单
+      hotkey: true, // 是否启用 ArtPlayer 原生快捷键
+      pip: true, // 是否启用画中画
+      fullscreen: true, // 是否启用浏览器全屏
+      fullscreenWeb: true, // 是否启用网页全屏
+      miniProgressBar: !isLive, // 是否显示迷你进度条，直播不显示
+      screenshot: true, // 是否启用截图
+      lock: true, // 是否启用移动端锁定按钮
+      fastForward: true, // 是否启用长按快进
+      autoOrientation: true, // 是否启用移动端全屏自动横屏
+      airplay: true, // 是否启用 AirPlay
+      playsInline: true, // 是否内联播放，避免移动端强制全屏
+      mutex: true, // 是否与页面上的其他 ArtPlayer 实例互斥播放
+      backdrop: true, // 是否显示控制栏背景遮罩
       moreVideoAttr: {
-        preload: 'metadata',
-        playsInline: true,
-        title: title ?? 'VfanTV 播放器',
+        preload: 'metadata', // 只预加载媒体元信息
+        playsInline: true, // 透传 video playsinline 属性
+        title: title ?? 'VfanTV 播放器', // 透传 video title 属性
       },
-      controls: buildControls({
-        hasNextEpisode,
-        hasPreviousEpisode,
-        nextLabel,
-        previousLabel,
-      }),
-      layers: buildLayers(),
-      settings: isVod
-        ? [
-            {
-              name: 'playlist-filtering',
-              html: '去广告（实验性）',
-              switch: playlistFilteringEnabled,
-              onSwitch(item) {
-                const nextEnabled = !item.switch
-                item.switch = nextEnabled
-                window.localStorage.setItem(HLS_PLAYLIST_FILTER_STORAGE_KEY, String(nextEnabled))
-                retryTimeRef.current = artRef.current?.currentTime ?? 0
-                resumeAfterReloadRef.current = true
-                setPlaylistFilteringEnabled(nextEnabled)
-              },
-            },
-          ]
-        : [],
+      plugins: [
+        // 背光插件
+        artplayerPluginAmbilight({
+          blur: '30px', // 背光模糊半径
+          opacity: 0.5, // 背光透明度
+        }),
+        // 独立外部音轨插件
+        ...(audioTrackUrl
+          ? [
+              artplayerPluginAudioTrack({
+                url: audioTrackUrl, // 独立外部音轨地址
+              }),
+            ]
+          : []),
+        ...(isHls
+          ? [
+              // HLS 控制插件
+              artplayerPluginHlsControl({
+                quality: {
+                  control: true, // 在控制栏显示 HLS 清晰度入口
+                  setting: true, // 在设置面板显示 HLS 清晰度入口
+                  title: 'Quality', // HLS 清晰度菜单标题
+                  auto: 'Auto', // HLS 自动清晰度文案
+                },
+                audio: {
+                  control: true, // 在控制栏显示 HLS 音轨入口
+                  setting: true, // 在设置面板显示 HLS 音轨入口
+                  title: 'Audio', // HLS 音轨菜单标题
+                  auto: 'Auto', // HLS 自动音轨文案
+                },
+              }),
+            ]
+          : []),
+      ],
       customType: {
+        // 自定义媒体类型处理器
         m3u8(video, url, artInstance) {
           destroyHls(hlsRef)
 
           if (Hls.isSupported()) {
-            const hls = new Hls(adBlockEnabled ? { loader: createFilteredHlsLoader(Hls) } : undefined)
+            const hls = new Hls()
             hlsRef.current = hls
             artInstance.hls = hls
             hls.loadSource(url)
@@ -176,19 +172,10 @@ export function BasicPlayer({
     } satisfies Option)
 
     artRef.current = art
-    ;(art as ArtplayerWithCallbacks).vfanCallbacksRef = callbacksRef
-    localizeInfoPanel(art, { formatPlaybackUrl, isLive, src })
 
     const applyStartTime = (): void => {
-      const requestedTime = retryTimeRef.current > 0 ? retryTimeRef.current : initialTime
-      if (requestedTime > 0 && Number.isFinite(art.duration) && requestedTime < art.duration) {
-        art.currentTime = requestedTime
-      }
-      retryTimeRef.current = 0
-
-      if (resumeAfterReloadRef.current) {
-        resumeAfterReloadRef.current = false
-        void art.play()
+      if (!isLive && initialTime > 0 && Number.isFinite(art.duration) && initialTime < art.duration) {
+        art.currentTime = initialTime
       }
     }
 
@@ -201,9 +188,6 @@ export function BasicPlayer({
       })
     })
     art.on('video:ended', () => callbacksRef.current.onEnded?.())
-    art.on('video:volumechange', () => {
-      window.localStorage.setItem(PLAYER_VOLUME_STORAGE_KEY, String(art.volume))
-    })
     art.on('error', (error) => {
       art.notice.show = error.message || '播放器加载失败'
     })
@@ -216,23 +200,7 @@ export function BasicPlayer({
       }
       container.innerHTML = ''
     }
-  }, [
-    adBlockEnabled,
-    autoPlay,
-    formatPlaybackUrl,
-    hasNextEpisode,
-    hasPreviousEpisode,
-    initialTime,
-    isHls,
-    isLive,
-    isVod,
-    loop,
-    nextLabel,
-    playlistFilteringEnabled,
-    previousLabel,
-    src,
-    title,
-  ])
+  }, [audioTrackUrl, autoPlay, initialTime, isHls, isLive, loop, src, title])
 
   if (!src) {
     return (
@@ -254,223 +222,9 @@ export function BasicPlayer({
 
   return (
     <div className={cn('relative w-full overflow-hidden bg-black', isTheaterMode && 'h-full', className)}>
-      <div ref={containerRef} className="h-full w-full [&_.art-video]:object-contain" />
+      <div ref={containerRef} className="h-full w-full" />
     </div>
   )
-}
-
-function buildControls({
-  hasNextEpisode,
-  hasPreviousEpisode,
-  nextLabel,
-  previousLabel,
-}: {
-  hasNextEpisode: boolean
-  hasPreviousEpisode: boolean
-  nextLabel: string
-  previousLabel: string
-}): NonNullable<Option['controls']> {
-  return [
-    {
-      name: 'previous',
-      position: 'left',
-      index: 5,
-      html: createControlIcon('previous'),
-      tooltip: previousLabel,
-      disable: !hasPreviousEpisode,
-      click(this: Artplayer) {
-        callbacksFromArt(this).onPreviousEpisode?.()
-      },
-    },
-    {
-      name: 'next',
-      position: 'left',
-      index: 15,
-      html: createControlIcon('next'),
-      tooltip: nextLabel,
-      disable: !hasNextEpisode,
-      click(this: Artplayer) {
-        callbacksFromArt(this).onNextEpisode?.()
-      },
-    },
-  ]
-}
-
-function buildLayers(): NonNullable<Option['layers']> {
-  return [
-    {
-      name: 'top-actions',
-      html: createTopActions(),
-      mounted(this: Artplayer, element) {
-        const statsButton = element.querySelector<HTMLButtonElement>('[data-player-action="stats"]')
-        const retryButton = element.querySelector<HTMLButtonElement>('[data-player-action="retry"]')
-        statsButton?.addEventListener('click', () => {
-          this.info.show = !this.info.show
-        })
-        retryButton?.addEventListener('click', () => retryPlayback(this))
-      },
-    },
-  ]
-}
-
-function callbacksFromArt(art: Artplayer): BasicPlayerCallbacks {
-  return (art as ArtplayerWithCallbacks).vfanCallbacksRef?.current ?? {}
-}
-
-function createTopActions(): HTMLElement {
-  const element = document.createElement('div')
-  element.style.cssText = [
-    'position:absolute',
-    'top:12px',
-    'right:12px',
-    'z-index:100',
-    'display:flex',
-    'align-items:center',
-    'gap:8px',
-    'pointer-events:auto',
-  ].join(';')
-  element.innerHTML = `
-    <button data-player-action="stats" type="button" title="统计信息" aria-label="统计信息">
-      ${getControlIconSvg('stats')}
-    </button>
-    <button data-player-action="retry" type="button" title="刷新重试" aria-label="刷新重试">
-      ${getControlIconSvg('retry')}
-    </button>
-  `
-
-  for (const button of element.querySelectorAll<HTMLElement>('button')) {
-    button.style.cssText = [
-      'width:34px',
-      'height:34px',
-      'border:0',
-      'border-radius:8px',
-      'display:flex',
-      'align-items:center',
-      'justify-content:center',
-      'color:rgba(255,255,255,.88)',
-      'background:rgba(0,0,0,.48)',
-      'cursor:pointer',
-    ].join(';')
-  }
-
-  return element
-}
-
-function createControlIcon(name: 'next' | 'previous'): HTMLElement {
-  const element = document.createElement('span')
-  element.innerHTML = getControlIconSvg(name)
-  return element
-}
-
-function getControlIconSvg(name: 'next' | 'previous' | 'retry' | 'stats'): string {
-  const paths: Record<typeof name, string> = {
-    previous: '<path d="m19 20-10-8 10-8v16Z"/><path d="M5 19V5"/>',
-    next: '<path d="m5 4 10 8-10 8V4Z"/><path d="M19 5v14"/>',
-    retry:
-      '<path d="M3 12a9 9 0 0 1 15.53-6.21"/><path d="M18 2v4h-4"/><path d="M21 12a9 9 0 0 1-15.53 6.21"/><path d="M6 22v-4h4"/>',
-    stats: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>',
-  }
-
-  return `<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`
-}
-
-function retryPlayback(art: Artplayer): void {
-  const currentTime = art.currentTime
-  void art
-    .switchUrl(art.url)
-    .then(() => {
-      if (currentTime > 0 && Number.isFinite(art.duration) && currentTime < art.duration) {
-        art.currentTime = currentTime
-      }
-      return art.play()
-    })
-    .catch((error: unknown) => {
-      art.notice.show = error instanceof Error ? error.message : '刷新重试失败'
-    })
-}
-
-function localizeInfoPanel(
-  art: Artplayer,
-  {
-    formatPlaybackUrl,
-    isLive,
-    src,
-  }: {
-    formatPlaybackUrl: (src: string) => string
-    isLive: boolean
-    src: string
-  },
-): void {
-  const { $infoClose, $infoPanel } = art.template
-  $infoClose.textContent = '关闭'
-  $infoPanel.innerHTML = `
-    <div class="art-info-item">
-      <div class="art-info-title">播放器版本：</div>
-      <div class="art-info-content">${Artplayer.version}</div>
-    </div>
-    <div class="art-info-item">
-      <div class="art-info-title">播放地址：</div>
-      <div class="art-info-content" data-vfan-info="url"></div>
-    </div>
-    <div class="art-info-item">
-      <div class="art-info-title">音量：</div>
-      <div class="art-info-content" data-vfan-info="volume"></div>
-    </div>
-    <div class="art-info-item">
-      <div class="art-info-title">播放时间：</div>
-      <div class="art-info-content" data-vfan-info="time"></div>
-    </div>
-    <div class="art-info-item">
-      <div class="art-info-title">总时长：</div>
-      <div class="art-info-content" data-vfan-info="duration"></div>
-    </div>
-    <div class="art-info-item">
-      <div class="art-info-title">分辨率：</div>
-      <div class="art-info-content" data-vfan-info="resolution"></div>
-    </div>
-  `
-
-  const refresh = (): void => {
-    setInfoText($infoPanel, 'url', formatPlaybackUrl(src))
-    setInfoText($infoPanel, 'volume', `${Math.round(art.volume * 100)}%`)
-    setInfoText($infoPanel, 'time', formatTime(art.currentTime))
-    setInfoText($infoPanel, 'duration', isLive ? '直播' : formatTime(art.duration))
-    setInfoText(
-      $infoPanel,
-      'resolution',
-      art.video.videoWidth > 0 && art.video.videoHeight > 0
-        ? `${art.video.videoWidth} x ${art.video.videoHeight}`
-        : '-',
-    )
-  }
-
-  refresh()
-  const timer = window.setInterval(refresh, 1000)
-  art.on('destroy', () => window.clearInterval(timer))
-}
-
-function setInfoText(panel: HTMLElement, name: string, value: string): void {
-  const element = panel.querySelector(`[data-vfan-info="${name}"]`)
-  if (element && element.textContent !== value) {
-    element.textContent = value
-  }
-}
-
-function formatPlaybackUrlForDisplay(src: string): string {
-  return src
-}
-
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '00:00'
-  }
-
-  const total = Math.floor(seconds)
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const secs = total % 60
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}` : `${pad(minutes)}:${pad(secs)}`
 }
 
 function isHlsSource(src: string | undefined, sourceType: BasicPlayerProps['sourceType']): boolean {
@@ -479,20 +233,6 @@ function isHlsSource(src: string | undefined, sourceType: BasicPlayerProps['sour
   }
 
   return sourceType === 'hls' || /\.m3u8(?:$|[?#])/i.test(src)
-}
-
-function readPlaylistFilteringEnabled(): boolean {
-  return window.localStorage.getItem(HLS_PLAYLIST_FILTER_STORAGE_KEY) !== 'false'
-}
-
-function readStoredPlayerVolume(): number {
-  const storedVolume = window.localStorage.getItem(PLAYER_VOLUME_STORAGE_KEY)
-  if (storedVolume === null) {
-    return DEFAULT_PLAYER_VOLUME
-  }
-
-  const volume = Number(storedVolume)
-  return Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : DEFAULT_PLAYER_VOLUME
 }
 
 function destroyHls(hlsRef: MutableRefObject<Hls | null>): void {

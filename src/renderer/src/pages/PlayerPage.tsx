@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowUpDown, CheckCircle2, Heart, ListVideo, Loader2, Radio, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, CheckCircle2, Heart, ListVideo, Loader2, Radio, RefreshCw } from 'lucide-react'
 import type { FavoriteInput, PlayLine, RecentPlayInput, VodSearchResult } from '@shared/types'
 import { parseVodPlayUrl } from '@shared/utils/vod-play-url'
 import { BasicPlayer, MediaPoster } from '@renderer/components'
@@ -489,10 +489,11 @@ export function PlayerPage(): React.JSX.Element {
           {!isTheaterMode ? (
             <header className="flex h-10 shrink-0 items-center justify-between gap-6">
               <button
-                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex h-10 shrink-0 items-center rounded-lg px-1 text-sm font-semibold transition-colors outline-none focus-visible:ring-2"
+                className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors outline-none focus-visible:ring-2"
                 type="button"
                 onClick={() => navigate(-1)}
               >
+                <ArrowLeft size={17} />
                 返回
               </button>
               <NowPlayingTitle title={playerTitle} />

@@ -23,6 +23,15 @@ importers:
       artplayer:
         specifier: 5.4.0
         version: 5.4.0
+      artplayer-plugin-ambilight:
+        specifier: 1.1.0
+        version: 1.1.0
+      artplayer-plugin-audio-track:
+        specifier: 1.1.0
+        version: 1.1.0
+      artplayer-plugin-hls-control:
+        specifier: 1.1.0
+        version: 1.1.0
       axios:
         specifier: ^1.17.0
         version: 1.17.0
@@ -120,6 +129,9 @@ importers:
       prettier:
         specifier: ^3.7.4
         version: 3.8.3
+      prettier-plugin-packagejson:
+        specifier: ^3.0.2
+        version: 3.0.2(prettier@3.8.3)
       prettier-plugin-tailwindcss:
         specifier: ^0.8.0
         version: 0.8.0(prettier@3.8.3)
@@ -2610,6 +2622,15 @@ packages:
     resolution: {integrity: sha512-BNoCY6SXXPQ7gF2opIP4GBE+Xw7U+pHMYKuzjgCN3GwiaIR09UUeKfheyIry77QtrCBlC0KK0q5/TER/tYh3PQ==}
     engines: {node: '>= 0.4'}
 
+  artplayer-plugin-ambilight@1.1.0:
+    resolution: {integrity: sha512-FkMI7bn9HovJMfEdgkKbo7/vPt6vrzcpELTaC/vM7B99FPSMWzAf6GAE0xnNxU3KibYcBV5gXnBgvHgpG2xq2A==}
+
+  artplayer-plugin-audio-track@1.1.0:
+    resolution: {integrity: sha512-pvvHvTSqC2+sBelwYyjAv2CVmaQgG9KpX+i96t/e8oyZRX/JuepC9iSVIp7GzB3AtliFzhVamksT+8lXvD3RCg==}
+
+  artplayer-plugin-hls-control@1.1.0:
+    resolution: {integrity: sha512-lWN5oUOWDorWFHdzKcmy9Z8eHcf5f5EcUGDrxBsZBX7aEL5dGRlHPQ5+wqQEizr38D9PYPfTI/nCyun2yFopEw==}
+
   artplayer@5.4.0:
     resolution: {integrity: sha512-2B+plbx8N2yNsjK4nJU3+EOG8TULm1LRZk/QPkWRAMEX2Ee/MSnZG/WJYz8kcoZxZuLKcQ3uXifqLuPxZOH29A==}
 
@@ -3015,9 +3036,17 @@ packages:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
     engines: {node: '>= 0.8'}
 
+  detect-indent@7.0.2:
+    resolution: {integrity: sha512-y+8xyqdGLL+6sh0tVeHcfP/QDd8gUgbasolJJpY7NgeQGSZ739bDtSiaiDgtoicy+mtYB81dKLxO9xRhCyIB3A==}
+    engines: {node: '>=12.20'}
+
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  detect-newline@4.0.1:
+    resolution: {integrity: sha512-qE3Veg1YXzGHQhlA6jzebZN2qVf6NX+A7m7qlhCGG30dJixrAQhYOsJjsnBjJkCSmuOPpCk30145fr8FV0bzog==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
@@ -3627,6 +3656,9 @@ packages:
 
   get-tsconfig@4.14.0:
     resolution: {integrity: sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA==}
+
+  git-hooks-list@4.2.1:
+    resolution: {integrity: sha512-WNvqJjOxxs/8ZP9+DWdwWJ7cDsd60NHf39XnD82pDVrKO5q7xfPqpkK6hwEAmBa/ZSEE4IOoR75EzbbIuwGlMw==}
 
   git-raw-commits@5.0.1:
     resolution: {integrity: sha512-Y+csSm2GD/PCSh6Isd/WiMjNAydu0VBiG9J7EdQsNA5P9uXvLayqjmTsNlK5Gs9IhblFZqOU0yid5Il5JPoLiQ==}
@@ -4566,6 +4598,14 @@ packages:
     resolution: {integrity: sha512-SxToR7P8Y2lWmv/kTzVLC1t/GDI2WGjMwNhLLE9qtH8Q13C+aEmuRlzDst4Up4s0Wc8sF2M+J57iB3cMLqftfg==}
     engines: {node: '>=6.0.0'}
 
+  prettier-plugin-packagejson@3.0.2:
+    resolution: {integrity: sha512-kmoj3hEynXwoHDo8ZhmWAIjRBoQWCDUVackiWfSDWdgD0rS3LGB61T9zoVbume/cotYdCoadUh4sqViAmXvpBQ==}
+    peerDependencies:
+      prettier: ^3
+    peerDependenciesMeta:
+      prettier:
+        optional: true
+
   prettier-plugin-tailwindcss@0.8.0:
     resolution: {integrity: sha512-V8ITGH87yuBDF6JpEZTOVlUz/saAwqb8f3HRgUj8Lh+tGCcrmorhsLpYqzygwFwK0PE2Ib6Mv3M7T/uE2tZV1g==}
     engines: {node: '>=20.19'}
@@ -5024,6 +5064,14 @@ packages:
     peerDependencies:
       react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+
+  sort-object-keys@2.1.0:
+    resolution: {integrity: sha512-SOiEnthkJKPv2L6ec6HMwhUcN0/lppkeYuN1x63PbyPRrgSPIuBJCiYxYyvWRTtjMlOi14vQUCGUJqS6PLVm8g==}
+
+  sort-package-json@3.7.1:
+    resolution: {integrity: sha512-ssk1HG7whF8N/T1IsNAQrtHG5Cbdi0rAgRJZXYBr9hF5xaHnBNzUx/W6LcthEW7FhOwvZssbESZuO+GxssqAyA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -7876,6 +7924,12 @@ snapshots:
       get-intrinsic: 1.3.0
       is-array-buffer: 3.0.5
 
+  artplayer-plugin-ambilight@1.1.0: {}
+
+  artplayer-plugin-audio-track@1.1.0: {}
+
+  artplayer-plugin-hls-control@1.1.0: {}
+
   artplayer@5.4.0:
     dependencies:
       option-validator: 2.0.6
@@ -8265,7 +8319,11 @@ snapshots:
 
   depd@2.0.0: {}
 
+  detect-indent@7.0.2: {}
+
   detect-libc@2.1.2: {}
+
+  detect-newline@4.0.1: {}
 
   detect-node-es@1.1.0: {}
 
@@ -9070,6 +9128,8 @@ snapshots:
   get-tsconfig@4.14.0:
     dependencies:
       resolve-pkg-maps: 1.0.0
+
+  git-hooks-list@4.2.1: {}
 
   git-raw-commits@5.0.1(conventional-commits-parser@6.4.0):
     dependencies:
@@ -9944,6 +10004,12 @@ snapshots:
     dependencies:
       fast-diff: 1.3.0
 
+  prettier-plugin-packagejson@3.0.2(prettier@3.8.3):
+    dependencies:
+      sort-package-json: 3.7.1
+    optionalDependencies:
+      prettier: 3.8.3
+
   prettier-plugin-tailwindcss@0.8.0(prettier@3.8.3):
     dependencies:
       prettier: 3.8.3
@@ -10530,6 +10596,18 @@ snapshots:
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
+
+  sort-object-keys@2.1.0: {}
+
+  sort-package-json@3.7.1:
+    dependencies:
+      detect-indent: 7.0.2
+      detect-newline: 4.0.1
+      git-hooks-list: 4.2.1
+      is-plain-obj: 4.1.0
+      semver: 7.8.4
+      sort-object-keys: 2.1.0
+      tinyglobby: 0.2.17
 
   source-map-js@1.2.1: {}
 
