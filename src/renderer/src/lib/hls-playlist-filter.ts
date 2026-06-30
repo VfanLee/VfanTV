@@ -4,8 +4,14 @@ import type { LoaderCallbacks, LoaderConfiguration, LoaderContext, LoaderRespons
 type PlaylistLoaderContext = LoaderContext & { type?: string }
 
 export function filterM3U8(content: string): string {
-  if (!content) return ''
+  if (!content) {
+    return ''
+  }
 
+  return filterDiscontinuityAds(filterCueAdBlocks(content))
+}
+
+function filterCueAdBlocks(content: string): string {
   const lines = content.split(/\r?\n/)
   const filteredLines: string[] = []
   let isSkippingAdBreak = false
@@ -25,6 +31,32 @@ export function filterM3U8(content: string): string {
 
     if (!isSkippingAdBreak) {
       filteredLines.push(line)
+    }
+  }
+
+  return filteredLines.join('\n')
+}
+
+function filterDiscontinuityAds(content: string): string {
+  const lines = content.split(/\r?\n/)
+  const filteredLines: string[] = []
+
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+
+    if (!trimmedLine.includes('#EXT-X-DISCONTINUITY')) {
+      filteredLines.push(line)
+      continue
+    }
+
+    // 常见点播广告：广告分片在 discontinuity 之前（EXTINF + ts）
+    if (filteredLines.length >= 2) {
+      const uriLine = filteredLines[filteredLines.length - 1]?.trim() ?? ''
+      const extinfLine = filteredLines[filteredLines.length - 2]?.trim() ?? ''
+      if (extinfLine.startsWith('#EXTINF') && uriLine && !uriLine.startsWith('#')) {
+        filteredLines.pop()
+        filteredLines.pop()
+      }
     }
   }
 

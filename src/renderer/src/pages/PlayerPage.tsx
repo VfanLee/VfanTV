@@ -233,6 +233,10 @@ export function PlayerPage(): React.JSX.Element {
       return
     }
 
+    if (locationState?.episodeUrl != null || (locationState?.initialTime ?? 0) > 0) {
+      return
+    }
+
     const episodeCount = getEpisodeCount(current)
     const hydrateKey = `${current.sourceId}:${current.vodId}:${currentTitleKey}`
 
@@ -242,7 +246,14 @@ export function PlayerPage(): React.JSX.Element {
 
     autoHydratedTitleRef.current.add(hydrateKey)
     void refreshSources()
-  }, [current, currentTitleKey, isRefreshingSources, refreshSources])
+  }, [
+    current,
+    currentTitleKey,
+    isRefreshingSources,
+    locationState?.episodeUrl,
+    locationState?.initialTime,
+    refreshSources,
+  ])
 
   const saveRecentProgress = async ({
     currentTime,

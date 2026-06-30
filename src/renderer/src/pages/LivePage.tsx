@@ -47,9 +47,11 @@ export function LivePage(): React.JSX.Element {
   const hasPreviousStream = activeStreamIndex > 0
   const hasNextStream =
     activeChannel != null && activeStreamIndex >= 0 && activeStreamIndex < activeChannel.streams.length - 1
-  const playerSrc = resolveLivePlaybackUrl(liveProxyBaseUrl, activeStream?.url)
-  const activeStreamIsLive = isLikelyHlsStream(activeStream?.url)
+  const activeStreamIsHls = isLikelyHlsStream(activeStream?.url)
+  const activeStreamIsLive = activeStream?.isLive === true
+  const playerSrc = resolveStreamPlaybackUrl(liveProxyBaseUrl, activeStream?.url)
   const playerTitle = activeChannel?.title
+  const formatPlaybackUrl = useCallback((_src: string) => activeStream?.url ?? '', [activeStream?.url])
   const groupedChannels = useMemo(() => groupChannels(playlist?.channels ?? [], keyword), [keyword, playlist])
   const channelCount = playlist?.channels.length ?? 0
   const streamCount = playlist?.channels.reduce((total, channel) => total + channel.streams.length, 0) ?? 0
@@ -223,16 +225,15 @@ export function LivePage(): React.JSX.Element {
               <BasicPlayer
                 autoPlay
                 className={isTheaterMode ? undefined : 'h-full'}
+                formatPlaybackUrl={formatPlaybackUrl}
                 hasNextEpisode={hasNextStream}
                 hasPreviousEpisode={hasPreviousStream}
                 isTheaterMode={isTheaterMode}
-                loop={!activeStreamIsLive}
                 navigationLabels={{ next: '下一线路', previous: '上一线路' }}
-                sourceType={activeStreamIsLive ? 'hls' : undefined}
+                sourceType={activeStreamIsHls ? 'hls' : undefined}
                 src={playerSrc}
                 title={playerTitle}
-                variant="live"
-                formatPlaybackUrl={() => activeStream?.url ?? ''}
+                variant={activeStreamIsLive ? 'live' : 'vod'}
                 onNextEpisode={() => selectStreamByOffset(1)}
                 onPreviousEpisode={() => selectStreamByOffset(-1)}
                 onToggleTheaterMode={() => setIsTheaterMode((current) => !current)}
@@ -490,7 +491,7 @@ function readCachedPlaylist(source: LiveSourceConfig): LivePlaylist | undefined 
       return undefined
     }
 
-    return cachedPlaylist
+    return normalizeCachedPlaylist(cachedPlaylist)
   } catch {
     return undefined
   }
@@ -572,6 +573,31 @@ function resolveLiveSelection(playlist: LivePlaylist, cached?: LiveSelectionCach
   }
 }
 
+function normalizeCachedPlaylist(playlist: LivePlaylist): LivePlaylist {
+  return {
+    ...playlist,
+    channels: playlist.channels.map((channel) => ({
+      ...channel,
+      streams: channel.streams.map((stream) => ({
+        ...stream,
+        isLive: stream.isLive === true,
+      })),
+    })),
+  }
+}
+
+function resolveStreamPlaybackUrl(proxyBaseUrl: string, url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined
+  }
+
+  if (!proxyBaseUrl) {
+    return url
+  }
+
+  return resolveLivePlaybackUrl(proxyBaseUrl, url)
+}
+
 function resolveLivePlaybackUrl(proxyBaseUrl: string, url: string | undefined): string | undefined {
   if (!proxyBaseUrl || !url) {
     return undefined
@@ -585,6 +611,7 @@ function resolveLivePlaybackUrl(proxyBaseUrl: string, url: string | undefined): 
 
     const proxyUrl = new URL('/media', proxyBaseUrl)
     proxyUrl.searchParams.set('url', targetUrl.toString())
+    proxyUrl.searchParams.set('referer', `${targetUrl.origin}/`)
     return proxyUrl.toString()
   } catch {
     return url
