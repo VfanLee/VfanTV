@@ -268,6 +268,10 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isSameAppOrigin(mainWindow, url)) {
+      return
+    }
+
     if (isAllowedExternalUrl(url)) {
       event.preventDefault()
       void openExternalUrl(url).catch((error: unknown) => {
@@ -282,6 +286,19 @@ function createWindow(): void {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+function isSameAppOrigin(window: BrowserWindow, url: string): boolean {
+  try {
+    const currentUrl = window.webContents.getURL()
+    if (!currentUrl) {
+      return false
+    }
+
+    return new URL(url).origin === new URL(currentUrl).origin
+  } catch {
+    return false
   }
 }
 

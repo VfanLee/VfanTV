@@ -232,6 +232,7 @@ export function LivePage(): React.JSX.Element {
                 src={playerSrc}
                 title={playerTitle}
                 variant="live"
+                formatPlaybackUrl={() => activeStream?.url ?? ''}
                 onNextEpisode={() => selectStreamByOffset(1)}
                 onPreviousEpisode={() => selectStreamByOffset(-1)}
                 onToggleTheaterMode={() => setIsTheaterMode((current) => !current)}

@@ -6,10 +6,37 @@ type PlaylistLoaderContext = LoaderContext & { type?: string }
 export function filterM3U8(content: string): string {
   if (!content) return ''
 
-  return content
-    .split(/\r?\n/)
-    .filter((line) => !line.trim().startsWith('#EXT-X-DISCONTINUITY'))
-    .join('\n')
+  const lines = content.split(/\r?\n/)
+  const filteredLines: string[] = []
+  let isSkippingAdBreak = false
+
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+
+    if (isAdBreakStart(trimmedLine)) {
+      isSkippingAdBreak = true
+      continue
+    }
+
+    if (isAdBreakEnd(trimmedLine)) {
+      isSkippingAdBreak = false
+      continue
+    }
+
+    if (!isSkippingAdBreak) {
+      filteredLines.push(line)
+    }
+  }
+
+  return filteredLines.join('\n')
+}
+
+function isAdBreakStart(line: string): boolean {
+  return /^#EXT-X-CUE-OUT(?::|$)/.test(line)
+}
+
+function isAdBreakEnd(line: string): boolean {
+  return line.startsWith('#EXT-X-CUE-IN')
 }
 
 export function createFilteredHlsLoader(HlsConstructor: typeof Hls): typeof Hls.DefaultConfig.loader {
