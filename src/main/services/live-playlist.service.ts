@@ -1,7 +1,8 @@
-import type { LiveChannel, LiveChannelStream, LivePlaylist } from '@shared/types'
+import type { LiveChannel, LiveChannelStream, LivePlaylist, LiveStreamProbeResult } from '@shared/types'
 import type { HttpClient } from './http-client'
 
 const MAX_PLAYLIST_SIZE = 10 * 1024 * 1024
+const MAX_STREAM_PLAYLIST_SIZE = 2 * 1024 * 1024
 const DEFAULT_GROUP = '未分组'
 
 interface ParsedExtInf {
@@ -30,14 +31,40 @@ export class LivePlaylistService {
 
     return parseLivePlaylist(content, parsedUrl.toString())
   }
+
+  async probeStream(url: string): Promise<LiveStreamProbeResult> {
+    const parsedUrl = new URL(url)
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { isLive: false }
+    }
+
+    const isLive = await this.probeHlsPlaylist(parsedUrl.toString(), 0)
+    return { isLive }
+  }
+
+  private async probeHlsPlaylist(url: string, depth: number): Promise<boolean> {
+    const content = await this.httpClient.get<string>(url, {
+      responseType: 'text',
+      maxContentLength: MAX_STREAM_PLAYLIST_SIZE,
+    })
+    const lines = parseM3uLines(content)
+
+    if (!lines[0]?.startsWith('#EXTM3U')) {
+      return false
+    }
+
+    const variantUrl = depth === 0 ? findFirstVariantPlaylistUrl(lines, url) : undefined
+    if (variantUrl) {
+      return this.probeHlsPlaylist(variantUrl, depth + 1)
+    }
+
+    return !lines.some((line) => line === '#EXT-X-ENDLIST')
+  }
 }
 
 export function parseLivePlaylist(content: string, sourceUrl: string): LivePlaylist {
-  const lines = content
-    .replace(/^\uFEFF/, '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const lines = parseM3uLines(content)
 
   if (lines.length === 0 || !lines[0]?.startsWith('#EXTM3U')) {
     throw new Error('直播源不是有效的 M3U 播放列表')
@@ -77,6 +104,25 @@ export function parseLivePlaylist(content: string, sourceUrl: string): LivePlayl
   }
 }
 
+function parseM3uLines(content: string): string[] {
+  return content
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function findFirstVariantPlaylistUrl(lines: string[], baseUrl: string): string | undefined {
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].startsWith('#EXT-X-STREAM-INF')) {
+      const variantLine = lines.slice(index + 1).find((line) => !line.startsWith('#'))
+      return variantLine ? new URL(variantLine, baseUrl).toString() : undefined
+    }
+  }
+
+  return undefined
+}
+
 function parseExtInf(line: string): ParsedExtInf {
   const commaIndex = line.indexOf(',')
   const metadata = commaIndex >= 0 ? line.slice(0, commaIndex) : line
@@ -92,7 +138,7 @@ function parseExtInf(line: string): ParsedExtInf {
     logo: attributes['tvg-logo']?.trim() || undefined,
     tvgName: tvgName || undefined,
     epgUrl: attributes['epg-url']?.trim() || undefined,
-    isLive: duration !== undefined && duration < 0,
+    isLive: duration === undefined || duration <= 0,
   }
 }
 

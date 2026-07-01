@@ -17,6 +17,8 @@ export interface PlayerNavigationLabels {
 }
 
 export interface BasicPlayerProps {
+  enableAdFilter?: boolean
+  enableAutoNext?: boolean
   autoPlay?: boolean
   audioTrackUrl?: string
   className?: string
@@ -102,6 +104,8 @@ export function BasicPlayer({
   autoPlay = false,
   audioTrackUrl,
   className,
+  enableAdFilter = true,
+  enableAutoNext = true,
   initialTime = 0,
   isTheaterMode = false,
   formatPlaybackUrl = normalizePlaybackUrlForDisplay,
@@ -123,7 +127,7 @@ export function BasicPlayer({
 
   const isLive = variant === 'live'
   const isHls = isHlsSource(src, sourceType)
-  const canUseAdFilter = isHls && !isLive
+  const canUseAdFilter = enableAdFilter && isHls && !isLive
 
   useEffect(() => {
     callbacksRef.current = {
@@ -155,7 +159,7 @@ export function BasicPlayer({
     let hlsControlUpdate: (() => void) | undefined
     let audioMenuItem: HTMLElement | undefined
     let loopEnabled = readLoopEnabled()
-    let autoNextEnabled = readAutoNextEnabled()
+    let autoNextEnabled = enableAutoNext && readAutoNextEnabled()
 
     const openSettingPanel = function (this: Artplayer, contextmenu: { show: boolean }): void {
       this.setting.show = true
@@ -214,20 +218,24 @@ export function BasicPlayer({
                   return nextEnabled
                 },
               },
-              {
-                name: 'vfan-auto-next',
-                html: '自动续播',
-                icon: artplayerSettingIcons.autoNext,
-                tooltip: autoNextEnabled ? '开启' : '关闭',
-                switch: autoNextEnabled,
-                onSwitch(item) {
-                  const nextEnabled = !item.switch
-                  autoNextEnabled = nextEnabled
-                  item.tooltip = nextEnabled ? '开启' : '关闭'
-                  window.localStorage.setItem(PLAYER_AUTO_NEXT_STORAGE_KEY, String(nextEnabled))
-                  return nextEnabled
-                },
-              },
+              ...(enableAutoNext
+                ? [
+                    {
+                      name: 'vfan-auto-next',
+                      html: '自动续播',
+                      icon: artplayerSettingIcons.autoNext,
+                      tooltip: autoNextEnabled ? '开启' : '关闭',
+                      switch: autoNextEnabled,
+                      onSwitch(item) {
+                        const nextEnabled = !item.switch
+                        autoNextEnabled = nextEnabled
+                        item.tooltip = nextEnabled ? '开启' : '关闭'
+                        window.localStorage.setItem(PLAYER_AUTO_NEXT_STORAGE_KEY, String(nextEnabled))
+                        return nextEnabled
+                      },
+                    },
+                  ]
+                : []),
             ]
           : []),
         ...(canUseAdFilter
@@ -326,7 +334,7 @@ export function BasicPlayer({
                 autoPlay,
                 loop: loopEnabled,
                 initialTime: initialTimeRef.current,
-                adFilterEnabled,
+                adFilterEnabled: canUseAdFilter && adFilterEnabled,
                 audioTrackUrl,
                 debugLog,
                 autoNextEnabled,
@@ -359,7 +367,7 @@ export function BasicPlayer({
           destroyHls(hlsRef)
 
           if (Hls.isSupported()) {
-            const hls = new Hls(createHlsConfig(isLive, adFilterEnabled))
+            const hls = new Hls(createHlsConfig(isLive, canUseAdFilter && adFilterEnabled))
             hlsRef.current = hls
             artInstance.hls = hls
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -408,6 +416,9 @@ export function BasicPlayer({
 
     artRef.current = art
     removeDefaultContextMenuItems(art)
+    if (isLive) {
+      removeLiveSettingItems(art)
+    }
     injectPlayerChromeStyles(art)
     localizeInfoPanel(art, displayPlaybackUrl, isHls, isLive)
     const refreshHlsQualityUi = (): void => {
@@ -466,7 +477,7 @@ export function BasicPlayer({
       })
     })
     art.on('video:ended', () => {
-      if (autoNextEnabled) {
+      if (enableAutoNext && autoNextEnabled) {
         callbacksRef.current.onEnded?.()
       }
     })
@@ -493,7 +504,7 @@ export function BasicPlayer({
       }
       container.innerHTML = ''
     }
-  }, [adFilterEnabled, audioTrackUrl, autoPlay, canUseAdFilter, isHls, isLive, src, title])
+  }, [adFilterEnabled, audioTrackUrl, autoPlay, canUseAdFilter, enableAutoNext, isHls, isLive, sourceType, src, title])
 
   if (!src) {
     return (
@@ -534,6 +545,16 @@ function removeDefaultContextMenuItems(art: Artplayer): void {
       art.contextmenu.remove(name)
     } catch {
       // Ignore missing built-in context menu entries.
+    }
+  }
+}
+
+function removeLiveSettingItems(art: Artplayer): void {
+  for (const name of ['playback-rate', 'vfan-loop', 'vfan-auto-next', 'hls-ad-filter']) {
+    try {
+      art.setting.remove(name)
+    } catch {
+      // Ignore settings that were not mounted for this source.
     }
   }
 }

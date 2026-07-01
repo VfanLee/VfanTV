@@ -9,7 +9,13 @@ import {
 import type { LiveChannel, LivePlaylist, LiveSourceConfig } from '@shared/types'
 import { BasicPlayer } from '@renderer/components'
 import { cn } from '@renderer/lib/utils'
-import { getMediaProxyBaseUrl, isApiAvailable, listLiveSources, loadLivePlaylist } from '@renderer/services/api'
+import {
+  getMediaProxyBaseUrl,
+  isApiAvailable,
+  listLiveSources,
+  loadLivePlaylist,
+  probeLiveStream,
+} from '@renderer/services/api'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import {
@@ -36,6 +42,7 @@ export function LivePage(): React.JSX.Element {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
   const [keyword, setKeyword] = useState('')
   const [liveProxyBaseUrl, setLiveProxyBaseUrl] = useState('')
+  const [streamProbe, setStreamProbe] = useState<{ url: string; isLive: boolean }>()
   const [isLoadingSettings, setIsLoadingSettings] = useState(true)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
   const [isTheaterMode, setIsTheaterMode] = useState(false)
@@ -47,11 +54,14 @@ export function LivePage(): React.JSX.Element {
   const hasPreviousStream = activeStreamIndex > 0
   const hasNextStream =
     activeChannel != null && activeStreamIndex >= 0 && activeStreamIndex < activeChannel.streams.length - 1
-  const activeStreamIsHls = isLikelyHlsStream(activeStream?.url)
-  const activeStreamIsLive = activeStream?.isLive === true
-  const playerSrc = resolveStreamPlaybackUrl(liveProxyBaseUrl, activeStream?.url)
+  const activeStreamUrl = activeStream?.url ?? ''
+  const activeStreamIsHls = isLikelyHlsStream(activeStreamUrl)
+  const activeStreamProbeIsLive = streamProbe?.url === activeStreamUrl ? streamProbe.isLive : undefined
+  const activeStreamIsLive =
+    activeStreamIsHls && activeStreamProbeIsLive !== undefined ? activeStreamProbeIsLive : activeStream?.isLive === true
+  const playerSrc = resolveStreamPlaybackUrl(liveProxyBaseUrl, activeStreamUrl)
   const playerTitle = activeChannel?.title
-  const formatPlaybackUrl = useCallback((_src: string) => activeStream?.url ?? '', [activeStream?.url])
+  const formatPlaybackUrl = (currentSrc: string): string => activeStreamUrl || currentSrc
   const groupedChannels = useMemo(() => groupChannels(playlist?.channels ?? [], keyword), [keyword, playlist])
   const channelCount = playlist?.channels.length ?? 0
   const streamCount = playlist?.channels.reduce((total, channel) => total + channel.streams.length, 0) ?? 0
@@ -152,6 +162,30 @@ export function LivePage(): React.JSX.Element {
   }, [activeChannelId, activeStreamId, expandedGroups, playlist, selectedSourceId])
 
   useEffect(() => {
+    if (!activeStreamUrl || !activeStreamIsHls || !isApiAvailable()) {
+      return
+    }
+
+    let active = true
+
+    void probeLiveStream(activeStreamUrl)
+      .then((result) => {
+        if (active) {
+          setStreamProbe({ url: activeStreamUrl, isLive: result.isLive })
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStreamProbe(undefined)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [activeStreamIsHls, activeStreamUrl])
+
+  useEffect(() => {
     if (!isTheaterMode) {
       return
     }
@@ -202,14 +236,14 @@ export function LivePage(): React.JSX.Element {
       className={cn(
         isTheaterMode
           ? 'fixed inset-0 z-50 flex flex-col bg-black'
-          : 'bg-background text-foreground h-screen overflow-hidden p-4',
+          : 'bg-background text-foreground min-h-screen overflow-y-auto p-3 sm:p-4 xl:h-screen xl:overflow-hidden',
       )}
     >
       <div
         className={cn(
           isTheaterMode
             ? 'flex min-h-0 flex-1 items-center justify-center'
-            : 'mx-auto flex h-full max-w-[1760px] flex-col gap-4',
+            : 'mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-[1760px] flex-col gap-3 sm:min-h-[calc(100vh-2rem)] sm:gap-4 xl:h-full xl:min-h-0',
         )}
       >
         {!isTheaterMode ? <NowPlayingTitle title={playerTitle} /> : null}
@@ -217,14 +251,22 @@ export function LivePage(): React.JSX.Element {
           className={cn(
             isTheaterMode
               ? 'aspect-video w-full max-w-[calc(100vh*16/9)]'
-              : 'grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]',
+              : 'grid flex-1 grid-cols-1 gap-3 sm:gap-4 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_420px]',
           )}
         >
           <section className={cn(isTheaterMode ? 'h-full w-full' : 'min-h-0')}>
-            <div className={cn('h-full min-h-0 overflow-hidden bg-black', !isTheaterMode && 'rounded-xl')}>
+            <div
+              className={cn(
+                'min-h-0 overflow-hidden bg-black',
+                !isTheaterMode && 'aspect-video rounded-xl xl:aspect-auto xl:h-full',
+                isTheaterMode && 'h-full',
+              )}
+            >
               <BasicPlayer
                 autoPlay
                 className={isTheaterMode ? undefined : 'h-full'}
+                enableAdFilter={false}
+                enableAutoNext={false}
                 formatPlaybackUrl={formatPlaybackUrl}
                 hasNextEpisode={hasNextStream}
                 hasPreviousEpisode={hasPreviousStream}
@@ -242,9 +284,9 @@ export function LivePage(): React.JSX.Element {
           </section>
 
           {!isTheaterMode ? (
-            <aside className="flex min-h-0 flex-col gap-4">
-              <div className="border-border bg-card rounded-xl border px-4 py-4">
-                <div className="flex items-center gap-2">
+            <aside className="flex min-h-[520px] flex-col gap-3 sm:gap-4 xl:min-h-0">
+              <div className="border-border bg-card rounded-xl border px-3 py-3 sm:px-4 sm:py-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="min-w-0 flex-1">
                     <Select
                       disabled={isLoadingSettings || liveSources.length === 0 || isLoadingPlaylist}
@@ -272,6 +314,7 @@ export function LivePage(): React.JSX.Element {
                     </Select>
                   </div>
                   <Button
+                    className="w-full sm:w-auto"
                     disabled={!selectedSource || isLoadingPlaylist}
                     onClick={() => void loadPlaylist({ force: true })}
                   >
@@ -285,7 +328,7 @@ export function LivePage(): React.JSX.Element {
               </div>
 
               <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-                <div className="border-border border-b p-4">
+                <div className="border-border border-b p-3 sm:p-4">
                   <div className="border-input bg-background flex h-10 items-center gap-2 rounded-xl border px-3">
                     <Search className="text-muted-foreground shrink-0" size={17} />
                     <Input
@@ -299,7 +342,7 @@ export function LivePage(): React.JSX.Element {
 
                 <div className="min-h-0 flex-1 overflow-auto">
                   {groupedChannels.length > 0 ? (
-                    <div className="flex flex-col p-4">
+                    <div className="flex flex-col p-3 sm:p-4">
                       {groupedChannels.map((group) => (
                         <section key={group.name} className="border-border border-b last:border-b-0">
                           <button
@@ -347,7 +390,7 @@ export function LivePage(): React.JSX.Element {
                 </div>
 
                 {activeChannel && activeChannel.streams.length > 1 ? (
-                  <div className="border-border bg-muted/40 border-t p-4">
+                  <div className="border-border bg-muted/40 border-t p-3 sm:p-4">
                     <div className="mb-2 text-xs font-semibold">线路</div>
                     <div className="flex flex-wrap gap-2">
                       {activeChannel.streams.map((stream) => (
